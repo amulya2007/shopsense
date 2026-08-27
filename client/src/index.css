@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import "tailwindcss";
+
+:root {
+  --ink: #16231f;
+  --ink-soft: #4b5a54;
+  --surface: #f3f6f3;
+  --card: #ffffff;
+  --border: #e1e6e1;
+  --primary: #0e4b44;
+  --primary-light: #1c6f63;
+  --primary-dark: #0a3630;
+  --sidebar: #0d1e1a;
+  --sidebar-soft: #a9c2ba;
+  --accent: #c98a2c;
+  --accent-soft: #f3e3c6;
+  --danger: #b8452f;
+  --danger-soft: #f6e2dc;
+  --success: #3f7d58;
+  --success-soft: #e0efe4;
+  --pending: #c98a2c;
+  --pending-soft: #f6ecd8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .font-display {
+  font-family: 'Sora', sans-serif;
+}
+
+.font-mono-stat {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.insights-page {
+  --insight-shadow: 0 14px 34px rgba(14, 75, 68, 0.08);
+  position: relative;
+  padding-top: 0.35rem;
+}
+
+.insights-page::before {
+  position: absolute;
+  z-index: -1;
+  top: -2rem;
+  right: 12%;
+  left: 12%;
+  height: 18rem;
+  border-top: 1px solid rgba(14, 75, 68, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 76%);
+  content: "";
+  pointer-events: none;
+}
+
+.insights-hero {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(118deg, var(--sidebar) 0%, var(--primary-dark) 38%, var(--primary) 72%, var(--primary-light) 100%);
+  box-shadow: var(--insight-shadow);
+}
+
+.insights-hero h1 {
+  max-width: 32rem;
+  letter-spacing: -0.02em;
+}
+
+.insights-hero::before,
+.insights-hero::after {
+  position: absolute;
+  border-radius: 999px;
+  content: "";
+  pointer-events: none;
+}
+
+.insights-hero::before {
+  width: 22rem;
+  height: 22rem;
+  right: -7rem;
+  top: -14rem;
+  background: rgba(201, 138, 44, 0.2);
+}
+
+.insights-hero::after {
+  width: 13rem;
+  height: 13rem;
+  right: 22%;
+  bottom: -10rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.insights-hero-content { position: relative; z-index: 1; }
+
+.insights-filter-card {
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  backdrop-filter: blur(10px);
+}
+
+.insights-filter-card input {
+  min-width: 0;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: transparent !important;
+}
+
+.insights-filter-card button {
+  color: var(--primary) !important;
+  background: var(--accent) !important;
+}
+
+.insights-section {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 8px 24px rgba(14, 75, 68, 0.045);
+  transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.insights-section:hover {
+  box-shadow: var(--insight-shadow);
+  border-color: rgba(14, 75, 68, 0.18) !important;
+  transform: translateY(-2px);
+}
+
+.insights-section::before {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light), transparent 76%);
+  content: "";
+}
+
+.insights-section-icon {
+  box-shadow: inset 0 0 0 1px rgba(14, 75, 68, 0.06);
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.insights-section:hover .insights-section-icon {
+  color: var(--accent);
+  background: var(--accent-soft) !important;
+  transform: rotate(-4deg);
+}
+
+.insights-metric {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(14, 75, 68, 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.insights-metric::after {
+  position: absolute;
+  width: 3.4rem;
+  height: 3.4rem;
+  right: -1.2rem;
+  bottom: -1.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  content: "";
+}
+
+.insights-metric:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(14, 75, 68, 0.08); }
+.insights-metric p:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(0.9rem, 1.8vw, 1.125rem); }
+
+.forecast-coverage {
+  border: 1px solid rgba(14, 75, 68, 0.1);
+  background: linear-gradient(135deg, rgba(224, 239, 228, 0.8), var(--surface));
+}
+
+.insights-table {
+  border-collapse: separate;
+  border-spacing: 0 0.25rem;
+}
+
+.insights-table thead { border-bottom: 1px solid var(--border); }
+.insights-table thead th { font-size: 0.68rem; letter-spacing: 0.045em; text-transform: uppercase; }
+.insights-table tbody tr { transition: background 140ms ease, box-shadow 140ms ease; }
+.insights-table tbody td { border-top: 1px solid transparent; border-bottom: 1px solid transparent; }
+.insights-table tbody tr:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+.insights-table tbody tr:hover td:first-child { border-radius: 0.55rem 0 0 0.55rem; }
+.insights-table tbody tr:hover td:last-child { border-radius: 0 0.55rem 0.55rem 0; }
+
+.insights-table tbody tr:first-child td {
+  border-top-color: rgba(14, 75, 68, 0.05);
+}
+
+.insights-table tbody td {
+  line-height: 1.45;
+}
+
+.insights-filter-card {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.insights-filter-card label { min-width: 0; }
+.insights-filter-card input { transition: box-shadow 160ms ease, transform 160ms ease; }
+.insights-filter-card input:focus { box-shadow: 0 0 0 3px rgba(201, 138, 44, 0.32); }
+.insights-filter-card button { min-height: 2.4rem; transition: transform 160ms ease, filter 160ms ease; }
+.insights-filter-card button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+
+@media (max-width: 640px) {
+  .insights-section:hover { transform: none; }
+  .insights-table { min-width: 460px; }
+  .insights-table th,
+  .insights-table td { padding-left: 0.4rem; padding-right: 0.4rem; }
+  .insights-hero::before { right: -12rem; }
+  .insights-page::before { right: 0; left: 0; }
+  .insights-section { border-radius: 1rem; }
+}
+
+@media (min-width: 1536px) {
+  .insights-page { max-width: 88rem; }
+}
