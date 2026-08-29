@@ -167,4 +167,45 @@ if (vendorCount === 0) {
   console.log("Seeded demo vendor -> vendor@demo.com / vendor123");
 }
 
+// Seed vendor sales and products if none exist
+const salesCount = db.prepare("SELECT COUNT(*) as c FROM sales").get().c;
+if (salesCount === 0) {
+  const vendor1 = db.prepare("SELECT id FROM vendors WHERE email = ?").get("vendor@demo.com");
+  if (vendor1) {
+    const existingProducts = db.prepare("SELECT COUNT(*) as c FROM products WHERE vendor_id = ?").get(vendor1.id).c;
+    if (existingProducts <= 1) {
+      db.prepare("INSERT INTO products (vendor_id, name, description, category, price, stock, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        vendor1.id, "Smart Fitness Band", "Water-resistant fitness tracker with heart rate and sleep monitor.", "Electronics", 1499, 85, ""
+      );
+      db.prepare("INSERT INTO products (vendor_id, name, description, category, price, stock, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        vendor1.id, "Casual Cotton T-Shirt", "100% premium breathable cotton crew neck t-shirt.", "Fashion", 799, 150, ""
+      );
+      db.prepare("INSERT INTO products (vendor_id, name, description, category, price, stock, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        vendor1.id, "Ceramic Coffee Mug Set", "Set of 4 handcrafted matte-finish ceramic coffee mugs.", "Home & Kitchen", 499, 60, ""
+      );
+    }
+  }
+
+  // Insert sample sales for available products
+  const allProducts = db.prepare("SELECT id, vendor_id, price FROM products").all();
+  if (allProducts.length > 0) {
+    const insertSale = db.prepare("INSERT INTO sales (vendor_id, product_id, quantity, amount, sold_at) VALUES (?, ?, ?, ?, ?)");
+    const now = new Date();
+    
+    allProducts.forEach((p, idx) => {
+      const salesCountForProd = 3 + (idx % 4);
+      for (let s = 0; s < salesCountForProd; s++) {
+        const daysAgo = Math.floor((s * 5 + (idx * 3)) % 28);
+        const saleDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+        const dateStr = saleDate.toISOString().replace("T", " ").substring(0, 19);
+        const qty = 1 + ((s + idx) % 4);
+        const amt = Math.round(qty * p.price * 100) / 100;
+        insertSale.run(p.vendor_id, p.id, qty, amt, dateStr);
+      }
+    });
+    console.log("Seeded initial vendor sales transactions");
+  }
+}
+
 module.exports = db;
+

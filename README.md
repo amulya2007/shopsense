@@ -156,6 +156,71 @@ Invoke-RestMethod -Uri http://localhost:4000/api/analytics/customers -Headers $h
 Invoke-RestMethod -Uri 'http://localhost:4000/api/analytics/top-products?category=Electronics&limit=5' -Headers $headers
 ```
 
+## Milestone 3: Advanced APIs & Reporting
+
+Milestone 3 introduces production-grade reporting, vendor benchmarking against marketplace aggregates, and direct CSV data exports while maintaining the established Node.js + Express + SQLite + React architecture and existing Milestone 1 & 2 capabilities.
+
+### 1. Reporting APIs
+
+Frontend-ready reporting and BI endpoints with support for timeframe filtering (`30d`, `90d`, `year`, `month`, `week`) and scope selection (`vendor` live sales or `marketplace` dataset):
+
+- `GET /api/analytics/reporting/sales-over-time`
+  - Parameters: `timeframe` (default `30d`), `scope` (`vendor` or `marketplace`)
+  - Returns chronologically ordered sales timeseries with `revenue`, `orders`, `unitsSold`, and `aov`, plus aggregated totals.
+- `GET /api/analytics/reporting/category-performance`
+  - Parameters: `scope` (`vendor` or `marketplace`)
+  - Returns revenue, units sold, order count, product count, and `revenueSharePct` across categories.
+- `GET /api/analytics/reporting/top-products`
+  - Parameters: `limit` (1–100, default 10), `category` (optional filter), `scope` (`vendor` or `marketplace`)
+  - Returns bestselling products ranked by volume and revenue.
+- `GET /api/analytics/reporting/summary`
+  - Parameters: `scope` (`vendor` or `marketplace`)
+  - Returns high-level executive KPIs including `totalRevenue`, `totalOrders`, `totalUnitsSold`, `totalProducts`, `averageOrderValue`, `topCategory`, and `topProduct`.
+
+### 2. Vendor Benchmarking API
+
+- `GET /api/analytics/benchmark`
+  - Compares the authenticated vendor against the marketplace average across all vendors for:
+    - **Total Revenue** (₹)
+    - **Total Orders**
+    - **Units Sold**
+    - **Products Listed**
+  - Computes exact percentage differences (`+X.X%` above or `-X.X%` below marketplace average).
+  - Provides categorized overall performance rating and actionable strategic insights.
+  - Enforces strict vendor isolation (vendors only see their own metrics and anonymized marketplace averages).
+
+### 3. CSV Export APIs
+
+- `GET /api/analytics/export/sales`
+  - Exports real sales records as a downloadable CSV.
+  - Columns: `Date,Product,Category,Quantity,Price,Revenue,Vendor`.
+  - Sets `Content-Type: text/csv; charset=utf-8` and `Content-Disposition: attachment; filename="sales_report.csv"`.
+- `GET /api/analytics/export/products`
+  - Exports product catalog performance metrics as a downloadable CSV.
+  - Columns: `ProductID,Name,Category,Price,Stock,UnitsSold,Revenue,Vendor`.
+  - Sets `Content-Disposition: attachment; filename="products_report.csv"`.
+
+### 4. Frontend Insights Integration
+
+Integrated seamlessly into the **Vendor Insights** page (`/vendor/insights`) without breaking existing Milestone 1 and Milestone 2 features:
+- **Interactive Reporting Scope & Export Toolbar**: Switch between vendor's live sales and marketplace dataset, and trigger real-time CSV downloads.
+- **Vendor vs Marketplace Benchmark Cards**: Side-by-side metric comparison cards with status badges (`Above Avg` / `Below Avg`), comparative progress bars, and strategic recommendations.
+- **Sales & Revenue Over Time Visualizer**: Smooth cubic spline curve chart with interactive timeframes (`Day`, `Week`, `Month`) and metric selectors (`Revenue`, `Units`, `Orders`, `Avg Order Value`).
+- **Category Performance & Top Products Breakdown**: Category contribution cards with revenue shares and ranked product listings.
+
+### 5. Authentication & Security
+
+- All new reporting, benchmarking, and export endpoints require a valid JWT token via `requireAuth(["vendor", "admin"])`.
+- Vendor data is strictly isolated; vendors cannot query or expose private transaction records of other vendors.
+- Zero divisions, empty catalog/sales scenarios, and invalid tokens are safely handled.
+
+### 6. Testing Performed
+
+- Automated test suite in `server/test_m3.js` validates all 7 new endpoints (status codes, JSON schemas, calculations, CSV headers, data isolation, and 401 unauthorized handling).
+- Frontend production build validated (`npm run build` with Vite).
+
+> **Note on Optional Features:** In accordance with instructions, optional features such as WebSockets, RAG, LangChain/LlamaIndex, AI Shopping Assistant, and Text-to-SQL are intentionally not implemented to maintain stability and focus entirely on the core Base Requirements of Milestone 3.
+
 ## Notes
 
 - Passwords are hashed with bcrypt; sessions use short-lived JWTs (7 days) stored

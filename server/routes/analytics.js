@@ -752,4 +752,661 @@ router.get("/similar-products", (req, res) => {
   res.json({ product, similarProducts });
 });
 
+// =========================================================================
+// MILESTONE 3: REPORTING APIS, BENCHMARKING & CSV EXPORT
+// =========================================================================
+
+function escapeCsvField(val) {
+  if (val === null || val === undefined) return '""';
+  const str = String(val);
+  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return `"${str}"`;
+}
+
+// 1. Reporting: Sales / Revenue Over Time
+router.get("/reporting/sales-over-time", (req, res) => {
+  try {
+    const timeframe = String(req.query.timeframe || "30d").trim().toLowerCase();
+    const scope = String(req.query.scope || (req.user.role === "vendor" ? "vendor" : "marketplace")).trim().toLowerCase();
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+
+    if (scope === "vendor") {
+      let salesQuery = "";
+      if (timeframe === "month") {
+        salesQuery = `
+          SELECT strftime('%Y-%m', sold_at) AS date,
+                 strftime('%m', sold_at) AS label,
+                 COALESCE(SUM(amount), 0) AS revenue,
+                 COUNT(id) AS orders,
+                 COALESCE(SUM(quantity), 0) AS unitsSold,
+                 ROUND(COALESCE(AVG(amount), 0), 2) AS aov
+          FROM sales
+          WHERE vendor_id = ?
+          GROUP BY strftime('%Y-%m', sold_at)
+          ORDER BY strftime('%Y-%m', sold_at) ASC
+        `;
+      } else if (timeframe === "week") {
+        salesQuery = `
+          SELECT CASE strftime('%w', sold_at)
+                   WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday'
+                   WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday'
+                   ELSE 'Saturday' END AS label,
+                 strftime('%w', sold_at) AS date,
+                 COALESCE(SUM(amount), 0) AS revenue,
+                 COUNT(id) AS orders,
+                 COALESCE(SUM(quantity), 0) AS unitsSold,
+                 ROUND(COALESCE(AVG(amount), 0), 2) AS aov
+          FROM sales
+          WHERE vendor_id = ?
+          GROUP BY strftime('%w', sold_at)
+          ORDER BY CAST(strftime('%w', sold_at) AS INTEGER) ASC
+        `;
+      } else {
+        const dayLimit = timeframe === "90d" ? 90 : timeframe === "year" ? 365 : 30;
+        salesQuery = `
+          SELECT date(sold_at) AS date,
+                 strftime('%m-%d', sold_at) AS label,
+                 COALESCE(SUM(amount), 0) AS revenue,
+                 COUNT(id) AS orders,
+                 COALESCE(SUM(quantity), 0) AS unitsSold,
+                 ROUND(COALESCE(AVG(amount), 0), 2) AS aov
+          FROM sales
+          WHERE vendor_id = ?
+          GROUP BY date(sold_at)
+          ORDER BY date(sold_at) ASC
+          LIMIT ${dayLimit}
+        `;
+      }
+
+      const rawData = db.prepare(salesQuery).all(vendorId);
+      const totalRevenue = rawData.reduce((sum, r) => sum + Number(r.revenue || 0), 0);
+      const totalOrders = rawData.reduce((sum, r) => sum + Number(r.orders || 0), 0);
+      const totalUnits = rawData.reduce((sum, r) => sum + Number(r.unitsSold || 0), 0);
+      const aov = totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0;
+
+      return res.json({
+        scope: "vendor",
+        timeframe,
+        vendorId,
+        summary: {
+          totalRevenue,
+          totalOrders,
+          totalUnitsSold: totalUnits,
+          averageOrderValue: aov
+        },
+        data: rawData
+      });
+    }
+
+    // Marketplace scope
+    const salesData = getHistoricalProducts(); // ensure cache
+    if (!salesTimeseriesCache) {
+      // Trigger cache population
+      db.prepare("SELECT COUNT(*) FROM analytics_orders").get();
+    }
+    // Pull from analytics_orders
+    let marketplaceData = [];
+    if (timeframe === "month") {
+      marketplaceData = db.prepare(`
+        SELECT CASE strftime('%m', o.order_date)
+                 WHEN '01' THEN 'Jan' WHEN '02' THEN 'Feb' WHEN '03' THEN 'Mar'
+                 WHEN '04' THEN 'Apr' WHEN '05' THEN 'May' WHEN '06' THEN 'Jun'
+                 WHEN '07' THEN 'Jul' WHEN '08' THEN 'Aug' WHEN '09' THEN 'Sep'
+                 WHEN '10' THEN 'Oct' WHEN '11' THEN 'Nov' ELSE 'Dec' END AS label,
+               strftime('%m', o.order_date) AS date,
+               COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue,
+               COUNT(DISTINCT o.order_id) AS orders,
+               COALESCE(SUM(oi.quantity), 0) AS unitsSold,
+               ROUND(COALESCE(AVG(o.total_amount), 0), 2) AS aov
+        FROM analytics_orders o
+        JOIN analytics_order_items oi ON oi.order_id = o.order_id
+        GROUP BY strftime('%m', o.order_date)
+        ORDER BY strftime('%m', o.order_date) ASC
+      `).all();
+    } else if (timeframe === "week") {
+      marketplaceData = db.prepare(`
+        SELECT CASE strftime('%w', o.order_date)
+                 WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday'
+                 WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday'
+                 ELSE 'Saturday' END AS label,
+               strftime('%w', o.order_date) AS date,
+               COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue,
+               COUNT(DISTINCT o.order_id) AS orders,
+               COALESCE(SUM(oi.quantity), 0) AS unitsSold,
+               ROUND(COALESCE(AVG(o.total_amount), 0), 2) AS aov
+        FROM analytics_orders o
+        JOIN analytics_order_items oi ON oi.order_id = o.order_id
+        GROUP BY strftime('%w', o.order_date)
+        ORDER BY CAST(strftime('%w', o.order_date) AS INTEGER) ASC
+      `).all();
+    } else {
+      const daySlice = timeframe === "90d" ? -90 : timeframe === "year" ? -365 : -30;
+      const allDaily = db.prepare(`
+        SELECT o.order_date AS date,
+               strftime('%m-%d', o.order_date) AS label,
+               COALESCE(SUM(o.total_amount), 0) AS revenue,
+               COUNT(DISTINCT o.order_id) AS orders,
+               COALESCE(SUM(oi.quantity), 0) AS unitsSold,
+               ROUND(COALESCE(AVG(o.total_amount), 0), 2) AS aov
+        FROM analytics_orders o
+        LEFT JOIN analytics_order_items oi ON oi.order_id = o.order_id
+        GROUP BY o.order_date
+        ORDER BY o.order_date ASC
+      `).all();
+      marketplaceData = allDaily.slice(daySlice);
+    }
+
+    const totalRevenue = marketplaceData.reduce((sum, r) => sum + Number(r.revenue || 0), 0);
+    const totalOrders = marketplaceData.reduce((sum, r) => sum + Number(r.orders || 0), 0);
+    const totalUnits = marketplaceData.reduce((sum, r) => sum + Number(r.unitsSold || 0), 0);
+    const aov = totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0;
+
+    res.json({
+      scope: "marketplace",
+      timeframe,
+      summary: {
+        totalRevenue,
+        totalOrders,
+        totalUnitsSold: totalUnits,
+        averageOrderValue: aov
+      },
+      data: marketplaceData
+    });
+  } catch (error) {
+    console.error("Sales over time error:", error);
+    res.status(500).json({ error: "Failed to load sales over time data." });
+  }
+});
+
+// 2. Reporting: Category Performance
+router.get("/reporting/category-performance", (req, res) => {
+  try {
+    const scope = String(req.query.scope || "marketplace").trim().toLowerCase();
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+
+    if (scope === "vendor") {
+      const categories = db.prepare(`
+        SELECT p.category,
+               COALESCE(SUM(s.amount), 0) AS revenue,
+               COALESCE(SUM(s.quantity), 0) AS unitsSold,
+               COUNT(s.id) AS orderCount,
+               COUNT(DISTINCT p.id) AS productCount
+        FROM products p
+        LEFT JOIN sales s ON s.product_id = p.id AND s.vendor_id = p.vendor_id
+        WHERE p.vendor_id = ?
+        GROUP BY p.category
+        ORDER BY revenue DESC, unitsSold DESC
+      `).all(vendorId);
+
+      const totalRevenue = categories.reduce((s, c) => s + Number(c.revenue || 0), 0);
+      const totalUnits = categories.reduce((s, c) => s + Number(c.unitsSold || 0), 0);
+
+      const enriched = categories.map((c) => ({
+        ...c,
+        revenueSharePct: totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 1000) / 10 : 0
+      }));
+
+      return res.json({
+        scope: "vendor",
+        vendorId,
+        summary: {
+          totalCategories: enriched.length,
+          totalRevenue,
+          totalUnitsSold: totalUnits
+        },
+        categories: enriched
+      });
+    }
+
+    // Marketplace scope
+    const categories = db.prepare(`
+      SELECT p.category,
+             COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue,
+             COALESCE(SUM(oi.quantity), 0) AS unitsSold,
+             COUNT(DISTINCT oi.order_id) AS orderCount,
+             COUNT(DISTINCT p.product_id) AS productCount
+      FROM analytics_products p
+      JOIN analytics_order_items oi ON oi.product_id = p.product_id
+      GROUP BY p.category
+      ORDER BY revenue DESC
+    `).all();
+
+    const totalRevenue = categories.reduce((s, c) => s + Number(c.revenue || 0), 0);
+    const totalUnits = categories.reduce((s, c) => s + Number(c.unitsSold || 0), 0);
+
+    const enriched = categories.map((c) => ({
+      ...c,
+      revenueSharePct: totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 1000) / 10 : 0
+    }));
+
+    res.json({
+      scope: "marketplace",
+      summary: {
+        totalCategories: enriched.length,
+        totalRevenue,
+        totalUnitsSold: totalUnits
+      },
+      categories: enriched
+    });
+  } catch (error) {
+    console.error("Category performance error:", error);
+    res.status(500).json({ error: "Failed to load category performance data." });
+  }
+});
+
+// 3. Reporting: Top-Selling Products
+router.get("/reporting/top-products", (req, res) => {
+  try {
+    const limit = boundedNumber(req.query.limit, 10, 1, 100);
+    const category = String(req.query.category || "").trim();
+    const scope = String(req.query.scope || "marketplace").trim().toLowerCase();
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+
+    if (scope === "vendor") {
+      let query = `
+        SELECT p.id AS product_id,
+               p.name AS product_name,
+               p.category,
+               p.price,
+               p.stock,
+               COALESCE(SUM(s.quantity), 0) AS unitsSold,
+               COALESCE(SUM(s.amount), 0) AS revenue,
+               COUNT(s.id) AS orderCount
+        FROM products p
+        LEFT JOIN sales s ON s.product_id = p.id AND s.vendor_id = p.vendor_id
+        WHERE p.vendor_id = ?
+      `;
+      const params = [vendorId];
+      if (category) {
+        query += " AND lower(p.category) = lower(?)";
+        params.push(category);
+      }
+      query += " GROUP BY p.id ORDER BY unitsSold DESC, revenue DESC LIMIT ?";
+      params.push(limit);
+
+      const products = db.prepare(query).all(...params);
+      return res.json({
+        scope: "vendor",
+        limit,
+        category: category || null,
+        products
+      });
+    }
+
+    // Marketplace scope
+    let query = `
+      SELECT p.product_id,
+             p.product_name,
+             p.category,
+             p.price,
+             p.stock,
+             COALESCE(SUM(oi.quantity), 0) AS unitsSold,
+             COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue,
+             COUNT(DISTINCT oi.order_id) AS orderCount
+      FROM analytics_products p
+      JOIN analytics_order_items oi ON oi.product_id = p.product_id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (category) {
+      query += " AND lower(p.category) = lower(?)";
+      params.push(category);
+    }
+    query += " GROUP BY p.product_id ORDER BY unitsSold DESC, revenue DESC LIMIT ?";
+    params.push(limit);
+
+    const products = db.prepare(query).all(...params);
+    res.json({
+      scope: "marketplace",
+      limit,
+      category: category || null,
+      products
+    });
+  } catch (error) {
+    console.error("Top products error:", error);
+    res.status(500).json({ error: "Failed to load top products." });
+  }
+});
+
+// 4. Reporting: Executive Summary
+router.get("/reporting/summary", (req, res) => {
+  try {
+    const scope = String(req.query.scope || (req.user.role === "vendor" ? "vendor" : "marketplace")).trim().toLowerCase();
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+
+    if (scope === "vendor") {
+      const salesRow = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) AS totalRevenue,
+               COUNT(id) AS totalOrders,
+               COALESCE(SUM(quantity), 0) AS totalUnitsSold
+        FROM sales WHERE vendor_id = ?
+      `).get(vendorId);
+
+      const productCount = db.prepare("SELECT COUNT(*) AS c FROM products WHERE vendor_id = ?").get(vendorId).c;
+      const topCat = db.prepare(`
+        SELECT p.category, SUM(s.amount) AS revenue
+        FROM sales s JOIN products p ON s.product_id = p.id
+        WHERE s.vendor_id = ?
+        GROUP BY p.category ORDER BY revenue DESC LIMIT 1
+      `).get(vendorId);
+
+      const topProd = db.prepare(`
+        SELECT p.id AS product_id, p.name AS product_name, SUM(s.quantity) AS unitsSold, SUM(s.amount) AS revenue
+        FROM sales s JOIN products p ON s.product_id = p.id
+        WHERE s.vendor_id = ?
+        GROUP BY p.id ORDER BY revenue DESC, unitsSold DESC LIMIT 1
+      `).get(vendorId);
+
+      const aov = salesRow.totalOrders > 0 ? Math.round((salesRow.totalRevenue / salesRow.totalOrders) * 100) / 100 : 0;
+
+      return res.json({
+        scope: "vendor",
+        vendorId,
+        totalRevenue: salesRow.totalRevenue,
+        totalOrders: salesRow.totalOrders,
+        totalUnitsSold: salesRow.totalUnitsSold,
+        totalProducts: productCount,
+        averageOrderValue: aov,
+        topCategory: topCat ? { name: topCat.category, revenue: topCat.revenue } : null,
+        topProduct: topProd || null
+      });
+    }
+
+    // Marketplace scope
+    const orderSummary = db.prepare(`
+      SELECT COUNT(*) AS totalOrders,
+             COALESCE(SUM(total_amount), 0) AS totalRevenue,
+             COALESCE(AVG(total_amount), 0) AS averageOrderValue
+      FROM analytics_orders
+    `).get();
+
+    const unitsRow = db.prepare("SELECT COALESCE(SUM(quantity), 0) AS totalUnitsSold FROM analytics_order_items").get();
+    const productCount = db.prepare("SELECT COUNT(*) AS c FROM analytics_products").get().c;
+    const customerCount = db.prepare("SELECT COUNT(*) AS c FROM analytics_customers").get().c;
+
+    const topCat = db.prepare(`
+      SELECT p.category, SUM(oi.quantity * oi.unit_price) AS revenue
+      FROM analytics_order_items oi JOIN analytics_products p ON oi.product_id = p.product_id
+      GROUP BY p.category ORDER BY revenue DESC LIMIT 1
+    `).get();
+
+    const topProd = db.prepare(`
+      SELECT p.product_id, p.product_name, SUM(oi.quantity) AS unitsSold, SUM(oi.quantity * oi.unit_price) AS revenue
+      FROM analytics_order_items oi JOIN analytics_products p ON oi.product_id = p.product_id
+      GROUP BY p.product_id ORDER BY unitsSold DESC, revenue DESC LIMIT 1
+    `).get();
+
+    res.json({
+      scope: "marketplace",
+      totalRevenue: orderSummary.totalRevenue,
+      totalOrders: orderSummary.totalOrders,
+      totalUnitsSold: unitsRow.totalUnitsSold,
+      totalProducts: productCount,
+      totalCustomers: customerCount,
+      averageOrderValue: Math.round(orderSummary.averageOrderValue * 100) / 100,
+      topCategory: topCat ? {
+        name: topCat.category,
+        revenue: topCat.revenue,
+        revenueSharePct: orderSummary.totalRevenue ? Math.round((topCat.revenue / orderSummary.totalRevenue) * 1000) / 10 : 0
+      } : null,
+      topProduct: topProd || null
+    });
+  } catch (error) {
+    console.error("Executive summary error:", error);
+    res.status(500).json({ error: "Failed to load summary." });
+  }
+});
+
+// 5. Benchmarking: Vendor vs Marketplace Average
+router.get("/benchmark", (req, res) => {
+  try {
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+    const vendor = db.prepare("SELECT id, full_name, business_name, email FROM vendors WHERE id = ?").get(vendorId);
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+    // Vendor metrics
+    const vendorRevenue = Number(db.prepare("SELECT COALESCE(SUM(amount), 0) AS v FROM sales WHERE vendor_id = ?").get(vendorId).v || 0);
+    const vendorOrders = Number(db.prepare("SELECT COUNT(*) AS v FROM sales WHERE vendor_id = ?").get(vendorId).v || 0);
+    const vendorUnits = Number(db.prepare("SELECT COALESCE(SUM(quantity), 0) AS v FROM sales WHERE vendor_id = ?").get(vendorId).v || 0);
+    const vendorProducts = Number(db.prepare("SELECT COUNT(*) AS v FROM products WHERE vendor_id = ?").get(vendorId).v || 0);
+
+    // Marketplace totals across approved vendors
+    const vendorCount = Number(db.prepare("SELECT COUNT(*) AS c FROM vendors WHERE status = 'approved'").get().c || 1);
+    const totalRevenue = Number(db.prepare("SELECT COALESCE(SUM(amount), 0) AS r FROM sales").get().r || 0);
+    const totalOrders = Number(db.prepare("SELECT COUNT(*) AS o FROM sales").get().o || 0);
+    const totalUnits = Number(db.prepare("SELECT COALESCE(SUM(quantity), 0) AS u FROM sales").get().u || 0);
+    const totalProducts = Number(db.prepare("SELECT COUNT(*) AS p FROM products").get().p || 0);
+
+    const marketplaceAvg = {
+      revenue: Math.round((totalRevenue / Math.max(1, vendorCount)) * 100) / 100,
+      orders: Math.round((totalOrders / Math.max(1, vendorCount)) * 10) / 10,
+      unitsSold: Math.round((totalUnits / Math.max(1, vendorCount)) * 10) / 10,
+      productCount: Math.round((totalProducts / Math.max(1, vendorCount)) * 10) / 10,
+    };
+
+    function compare(label, vendorVal, avgVal, isCurrency = false) {
+      const diff = Math.round((vendorVal - avgVal) * 100) / 100;
+      let pct = 0;
+      if (avgVal > 0) {
+        pct = Number((((vendorVal - avgVal) / avgVal) * 100).toFixed(1));
+      } else if (vendorVal > 0) {
+        pct = 100.0;
+      }
+      const status = pct > 0 ? "above" : pct < 0 ? "below" : "equal";
+      const formattedDiff = `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
+      return {
+        label,
+        vendorValue: vendorVal,
+        marketplaceAverage: avgVal,
+        difference: diff,
+        percentageDifference: pct,
+        status,
+        formattedDiff,
+        currency: isCurrency
+      };
+    }
+
+    const revenueComp = compare("Total Revenue", vendorRevenue, marketplaceAvg.revenue, true);
+    const ordersComp = compare("Total Orders", vendorOrders, marketplaceAvg.orders, false);
+    const unitsComp = compare("Units Sold", vendorUnits, marketplaceAvg.unitsSold, false);
+    const productsComp = compare("Products Listed", vendorProducts, marketplaceAvg.productCount, false);
+
+    const aboveCount = [revenueComp, ordersComp, unitsComp, productsComp].filter((c) => c.status === "above").length;
+    let overallPerformance = "At Market Average";
+    if (aboveCount >= 3) overallPerformance = "Top Performer (Above Average)";
+    else if (aboveCount >= 2) overallPerformance = "Competitive (Above Average in key areas)";
+    else if (revenueComp.status === "below") overallPerformance = "Growth Opportunity (Below Average)";
+
+    const insights = [];
+    if (revenueComp.status === "above") {
+      insights.push(`Your revenue (₹${vendorRevenue.toLocaleString("en-IN")}) is ${revenueComp.formattedDiff} above the marketplace average.`);
+    } else if (revenueComp.status === "below") {
+      insights.push(`Your revenue (₹${vendorRevenue.toLocaleString("en-IN")}) is ${revenueComp.formattedDiff.replace("+", "")} below the marketplace average.`);
+    } else {
+      insights.push("Your revenue is on par with the marketplace average.");
+    }
+
+    if (productsComp.status === "below") {
+      insights.push(`Listing more products (currently ${vendorProducts} vs avg ${marketplaceAvg.productCount}) can help expand your category reach and order volume.`);
+    } else if (productsComp.status === "above") {
+      insights.push(`Strong product catalog depth with ${vendorProducts} products listed (marketplace average: ${marketplaceAvg.productCount}).`);
+    }
+
+    if (unitsComp.status === "above") {
+      insights.push(`High unit sales volume (${vendorUnits} units sold vs marketplace avg ${marketplaceAvg.unitsSold}).`);
+    }
+
+    res.json({
+      vendor: {
+        id: vendor.id,
+        fullName: vendor.full_name,
+        businessName: vendor.business_name,
+        email: vendor.email
+      },
+      marketplace: {
+        totalVendors: vendorCount,
+        totalRevenue,
+        totalOrders,
+        totalUnitsSold: totalUnits,
+        totalProducts
+      },
+      benchmarks: {
+        revenue: revenueComp,
+        orders: ordersComp,
+        unitsSold: unitsComp,
+        productCount: productsComp
+      },
+      overallPerformance,
+      insights
+    });
+  } catch (error) {
+    console.error("Benchmark calculation error:", error);
+    res.status(500).json({ error: "Failed to calculate vendor benchmark metrics." });
+  }
+});
+
+// 6. CSV Export: Sales Report
+router.get("/export/sales", (req, res) => {
+  try {
+    const scope = String(req.query.scope || (req.user.role === "vendor" ? "vendor" : "marketplace")).trim().toLowerCase();
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+
+    let rows = [];
+    if (scope === "vendor") {
+      rows = db.prepare(`
+        SELECT s.sold_at AS date,
+               p.name AS product,
+               p.category,
+               s.quantity,
+               p.price,
+               s.amount AS revenue,
+               v.business_name AS vendor
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        JOIN vendors v ON s.vendor_id = v.id
+        WHERE s.vendor_id = ?
+        ORDER BY s.sold_at DESC
+      `).all(vendorId);
+
+      // If vendor has no sales, fall back to empty array with headers
+    } else {
+      // Marketplace sales export
+      rows = db.prepare(`
+        SELECT o.order_date AS date,
+               p.product_name AS product,
+               p.category,
+               oi.quantity,
+               oi.unit_price AS price,
+               (oi.quantity * oi.unit_price) AS revenue,
+               'ShopSense Marketplace' AS vendor
+        FROM analytics_order_items oi
+        JOIN analytics_orders o ON oi.order_id = o.order_id
+        JOIN analytics_products p ON oi.product_id = p.product_id
+        ORDER BY o.order_date DESC
+        LIMIT 5000
+      `).all();
+    }
+
+    const headers = ["Date", "Product", "Category", "Quantity", "Price", "Revenue", "Vendor"];
+    const csvLines = [headers.join(",")];
+
+    rows.forEach((row) => {
+      const line = [
+        escapeCsvField(row.date),
+        escapeCsvField(row.product),
+        escapeCsvField(row.category),
+        row.quantity !== undefined ? row.quantity : 0,
+        row.price !== undefined ? Number(row.price).toFixed(2) : "0.00",
+        row.revenue !== undefined ? Number(row.revenue).toFixed(2) : "0.00",
+        escapeCsvField(row.vendor)
+      ];
+      csvLines.push(line.join(","));
+    });
+
+    const csvContent = csvLines.join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="sales_report.csv"');
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.send(csvContent);
+  } catch (error) {
+    console.error("Sales CSV export error:", error);
+    res.status(500).json({ error: "Failed to generate sales CSV export." });
+  }
+});
+
+// 7. CSV Export: Products Report
+router.get("/export/products", (req, res) => {
+  try {
+    const scope = String(req.query.scope || (req.user.role === "vendor" ? "vendor" : "marketplace")).trim().toLowerCase();
+    const vendorId = req.user.role === "admin" && req.query.vendorId ? Number(req.query.vendorId) : req.user.id;
+
+    let rows = [];
+    if (scope === "vendor") {
+      rows = db.prepare(`
+        SELECT p.id AS product_id,
+               p.name AS product_name,
+               p.category,
+               p.price,
+               p.stock,
+               COALESCE(SUM(s.quantity), 0) AS units_sold,
+               COALESCE(SUM(s.amount), 0) AS revenue,
+               v.business_name AS vendor
+        FROM products p
+        JOIN vendors v ON p.vendor_id = v.id
+        LEFT JOIN sales s ON s.product_id = p.id AND s.vendor_id = p.vendor_id
+        WHERE p.vendor_id = ?
+        GROUP BY p.id
+        ORDER BY units_sold DESC, revenue DESC
+      `).all(vendorId);
+    } else {
+      rows = db.prepare(`
+        SELECT p.product_id,
+               p.product_name,
+               p.category,
+               p.price,
+               p.stock,
+               COALESCE(SUM(oi.quantity), 0) AS units_sold,
+               COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue,
+               'ShopSense Marketplace' AS vendor
+        FROM analytics_products p
+        LEFT JOIN analytics_order_items oi ON oi.product_id = p.product_id
+        GROUP BY p.product_id
+        ORDER BY units_sold DESC, revenue DESC
+        LIMIT 5000
+      `).all();
+    }
+
+    const headers = ["ProductID", "Name", "Category", "Price", "Stock", "UnitsSold", "Revenue", "Vendor"];
+    const csvLines = [headers.join(",")];
+
+    rows.forEach((row) => {
+      const line = [
+        escapeCsvField(row.product_id),
+        escapeCsvField(row.product_name),
+        escapeCsvField(row.category),
+        row.price !== undefined ? Number(row.price).toFixed(2) : "0.00",
+        row.stock !== undefined ? row.stock : 0,
+        row.units_sold !== undefined ? row.units_sold : 0,
+        row.revenue !== undefined ? Number(row.revenue).toFixed(2) : "0.00",
+        escapeCsvField(row.vendor)
+      ];
+      csvLines.push(line.join(","));
+    });
+
+    const csvContent = csvLines.join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="products_report.csv"');
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.send(csvContent);
+  } catch (error) {
+    console.error("Products CSV export error:", error);
+    res.status(500).json({ error: "Failed to generate products CSV export." });
+  }
+});
+
 module.exports = router;
+

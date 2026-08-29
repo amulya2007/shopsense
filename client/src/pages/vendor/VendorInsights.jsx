@@ -19,7 +19,14 @@ import {
   Award,
   Shield,
   Clock,
-  ArrowUpDown
+  ArrowUpDown,
+  Download,
+  Scale,
+  FileSpreadsheet,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+  FileText
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../../lib/api";
@@ -177,6 +184,139 @@ function getSmoothSplinePath(points) {
   return path;
 }
 
+// Milestone 3: Vendor vs Marketplace Benchmark Component
+function VendorBenchmarkPanel({ benchmark }) {
+  if (!benchmark || !benchmark.benchmarks) {
+    return <Empty message="Benchmarking metrics are currently calculating..." />;
+  }
+
+  const { benchmarks, overallPerformance, insights, marketplace, vendor } = benchmark;
+  const { revenue, orders, unitsSold, productCount } = benchmarks;
+
+  const items = [
+    { key: "revenue", data: revenue, icon: DollarSign, isCurr: true },
+    { key: "orders", data: orders, icon: ShoppingCart, isCurr: false },
+    { key: "unitsSold", data: unitsSold, icon: Boxes, isCurr: false },
+    { key: "productCount", data: productCount, icon: Layers, isCurr: false }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Benchmark Header Summary */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-700/10 text-emerald-800 font-bold">
+            <Scale size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-display font-bold text-sm sm:text-base">{vendor?.businessName || "Your Business"} vs Marketplace Benchmark</h3>
+              <Badge tone={overallPerformance?.includes("Above") ? "success" : overallPerformance?.includes("Competitive") ? "gold" : "default"}>
+                {overallPerformance}
+              </Badge>
+            </div>
+            <p className="text-xs text-[var(--ink-soft)] mt-0.5">
+              Compared against the average performance across all approved vendors in the marketplace ({marketplace?.totalVendors || 1} vendors).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Metric Benchmark Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map(({ key, data, icon: Icon, isCurr }) => {
+          if (!data) return null;
+          const isAbove = data.status === "above";
+          const isBelow = data.status === "below";
+          return (
+            <div
+              key={key}
+              className="rounded-2xl p-4 border transition-all flex flex-col justify-between"
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--ink-soft)]">
+                    <Icon size={14} className="text-[var(--primary)]" /> {data.label}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                      isAbove
+                        ? "bg-emerald-100 text-emerald-800"
+                        : isBelow
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {isAbove ? <ArrowUpRight size={13} /> : isBelow ? <ArrowDownRight size={13} /> : null}
+                    {data.formattedDiff} {isAbove ? "Above" : isBelow ? "Below" : "Avg"}
+                  </span>
+                </div>
+
+                {/* Values */}
+                <div className="mt-3 flex items-baseline justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-[var(--ink-soft)]">You</p>
+                    <p className="font-mono-stat text-xl font-bold text-[var(--ink)]">
+                      {isCurr ? formatINR(data.vendorValue) : number(data.vendorValue)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-bold text-[var(--ink-soft)]">Marketplace Avg</p>
+                    <p className="font-mono-stat text-base font-semibold text-[var(--ink-soft)]">
+                      {isCurr ? formatINR(data.marketplaceAverage) : number(data.marketplaceAverage)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Comparative Dual Bar */}
+              <div className="mt-4 pt-3 border-t border-black/5 space-y-1.5">
+                <div className="flex justify-between text-[10px] text-[var(--ink-soft)]">
+                  <span>Relative Performance</span>
+                  <span className="font-semibold font-mono-stat">{data.formattedDiff}</span>
+                </div>
+                <div className="h-2 w-full rounded-full overflow-hidden bg-black/5 flex">
+                  {(() => {
+                    const max = Math.max(1, data.vendorValue, data.marketplaceAverage);
+                    const vendorPct = Math.min(100, Math.round((data.vendorValue / max) * 100));
+                    return (
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.max(8, vendorPct)}%`,
+                          background: isAbove ? "var(--primary)" : isBelow ? "#D97706" : "#64748B"
+                        }}
+                      />
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Strategic Insights */}
+      {insights && insights.length > 0 && (
+        <div className="rounded-xl p-4 border border-emerald-700/20 bg-emerald-900/5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5 mb-2">
+            <Lightbulb size={14} className="text-emerald-700" /> Key Benchmark Insights
+          </h4>
+          <ul className="space-y-1.5 text-xs text-emerald-950">
+            {insights.map((insight, idx) => (
+              <li key={idx} className="flex items-start gap-2">
+                <span className="text-emerald-700 font-bold">•</span>
+                <span>{insight}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 3. Spacious Sales Performance Graph (Day, Week, Month)
 function SpaciousSalesChart({ data }) {
   const [timeframe, setTimeframe] = useState("30d"); // "30d", "90d", "year", "month", "week"
@@ -186,6 +326,16 @@ function SpaciousSalesChart({ data }) {
 
   const series = useMemo(() => {
     if (!data) return [];
+    if (Array.isArray(data.data) && data.data.length > 0) {
+      return data.data.map((item) => ({
+        label: item.label || (item.date ? item.date.slice(5) : ""),
+        fullDate: item.date || item.label || "",
+        revenue: Number(item.revenue || 0),
+        units: Number(item.unitsSold || item.units || item.purchases || 0),
+        orders: Number(item.orders || 0),
+        aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
+      }));
+    }
     if (timeframe === "30d") {
       const list = rows(data.revenueByPeriod?.day30 || data.salesByDate?.slice(-30));
       return list.map((item) => ({
@@ -731,6 +881,14 @@ export default function VendorInsights() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState(getSettings);
 
+  // Milestone 3 Reporting & Benchmarking States
+  const [benchmarkData, setBenchmarkData] = useState(null);
+  const [reportingScope, setReportingScope] = useState("vendor"); // "vendor" | "marketplace"
+  const [reportingTimeframe, setReportingTimeframe] = useState("30d"); // "30d" | "90d" | "year" | "month" | "week"
+  const [reportingData, setReportingData] = useState(null);
+  const [exportingSales, setExportingSales] = useState(false);
+  const [exportingProducts, setExportingProducts] = useState(false);
+
   // Customer Section States (3 Tiers Filter & Search)
   const [customerTierFilter, setCustomerTierFilter] = useState("all"); // "all", "high", "medium", "low"
   const [customerSearch, setCustomerSearch] = useState("");
@@ -757,15 +915,34 @@ export default function VendorInsights() {
         category: forecastCategory,
         search: forecastSearch
       };
-      const [inventory, customers, sales, historical, patterns, rules, recommendations] = await Promise.all([
+      const [
+        inventory,
+        customers,
+        sales,
+        historical,
+        patterns,
+        rules,
+        recommendations,
+        benchmarkRes,
+        repSalesRes,
+        repCatRes,
+        repTopRes,
+        repSumRes
+      ] = await Promise.all([
         api.get("/analytics/inventory", { params }),
         api.get("/analytics/customers"),
         api.get("/analytics/sales"),
         api.get("/analytics/historical-summary"),
         api.get("/analytics/frequent-patterns", { params }),
         api.get("/analytics/association-rules", { params }),
-        api.get("/analytics/recommendations", { params })
+        api.get("/analytics/recommendations", { params }),
+        api.get("/analytics/benchmark"),
+        api.get(`/analytics/reporting/sales-over-time?timeframe=${reportingTimeframe}&scope=${reportingScope}`),
+        api.get(`/analytics/reporting/category-performance?scope=${reportingScope}`),
+        api.get(`/analytics/reporting/top-products?limit=10&scope=${reportingScope}`),
+        api.get(`/analytics/reporting/summary?scope=${reportingScope}`)
       ]);
+
       const optional = await Promise.allSettled([
         api.get("/analytics/forecast", { params }),
         api.get("/analytics/validation")
@@ -778,6 +955,14 @@ export default function VendorInsights() {
         setError(forecastResult.reason?.response?.data?.error || "Forecast service is temporarily unavailable.");
       }
 
+      setBenchmarkData(benchmarkRes.data || null);
+      setReportingData({
+        salesOverTime: repSalesRes.data || {},
+        categoryPerformance: repCatRes.data || {},
+        topProducts: repTopRes.data || {},
+        summary: repSumRes.data || {}
+      });
+
       const forecasts = rows(forecast?.forecasts);
       setData({
         inventory: { ...inventory.data, summary: inventory.data?.summary || {} },
@@ -788,6 +973,13 @@ export default function VendorInsights() {
         },
         sales: sales.data || {},
         historical: historical.data || {},
+        benchmark: benchmarkRes.data || {},
+        reporting: {
+          salesOverTime: repSalesRes.data || {},
+          categoryPerformance: repCatRes.data || {},
+          topProducts: repTopRes.data || {},
+          summary: repSumRes.data || {}
+        },
         patterns: {
           ...patterns.data,
           patterns: rows(patterns.data?.patterns),
@@ -820,9 +1012,50 @@ export default function VendorInsights() {
     }
   };
 
+  // CSV Export Handlers
+  const handleExportSales = async (scope = reportingScope) => {
+    try {
+      setExportingSales(true);
+      const res = await api.get(`/analytics/export/sales?scope=${scope}`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv;charset=utf-8;" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `sales_report_${scope}_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export sales CSV failed:", err);
+      alert("Unable to export sales CSV. Please try again.");
+    } finally {
+      setExportingSales(false);
+    }
+  };
+
+  const handleExportProducts = async (scope = reportingScope) => {
+    try {
+      setExportingProducts(true);
+      const res = await api.get(`/analytics/export/products?scope=${scope}`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv;charset=utf-8;" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `products_report_${scope}_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export products CSV failed:", err);
+      alert("Unable to export products CSV. Please try again.");
+    } finally {
+      setExportingProducts(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
-  }, [forecastScope, forecastCategory, forecastDays]);
+  }, [forecastScope, forecastCategory, forecastDays, reportingScope, reportingTimeframe]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(settings));
@@ -867,6 +1100,7 @@ export default function VendorInsights() {
   }, [filteredForecasts, selectedProduct, data?.forecasts]);
 
   const customerTiers = data?.customers?.summary?.tiers || {};
+
 
   return (
     <main className="insights-page mx-auto w-full max-w-7xl space-y-6 pb-12">
@@ -954,6 +1188,73 @@ export default function VendorInsights() {
             <StatCard icon={Users} label="Total customers" value={number(data.historical.totalCustomers)} accent="success" />
             <StatCard icon={TrendingUp} label="Average order value" value={formatINR(data.sales.summary.averageOrderValue)} />
           </div>
+
+          {/* ========================================================================= */}
+          {/* MILESTONE 3: CSV EXPORT & REPORTING SCOPE TOOLBAR */}
+          {/* ========================================================================= */}
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-bold text-[var(--ink-soft)] uppercase tracking-wider">
+                Reporting Scope:
+              </span>
+              <div className="flex rounded-lg p-0.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                {[
+                  { id: "vendor", label: "🏪 My Vendor Sales" },
+                  { id: "marketplace", label: "🌐 Marketplace (10k Products)" }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setReportingScope(tab.id)}
+                    className="rounded-md px-3.5 py-1.5 text-xs font-bold transition-all"
+                    style={{
+                      background: reportingScope === tab.id ? "var(--primary)" : "transparent",
+                      color: reportingScope === tab.id ? "white" : "var(--ink-soft)"
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleExportSales(reportingScope)}
+                disabled={exportingSales}
+                className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90 shadow-sm disabled:opacity-50"
+                style={{ background: "var(--primary)" }}
+                title="Download real Sales CSV export"
+              >
+                <Download size={14} className={exportingSales ? "animate-bounce" : ""} />
+                {exportingSales ? "Exporting Sales..." : "Export Sales CSV"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportProducts(reportingScope)}
+                disabled={exportingProducts}
+                className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition-opacity hover:opacity-90 shadow-sm border disabled:opacity-50"
+                style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink)" }}
+                title="Download real Product Catalog CSV export"
+              >
+                <FileSpreadsheet size={14} className={exportingProducts ? "animate-bounce text-emerald-700" : "text-emerald-700"} />
+                {exportingProducts ? "Exporting Products..." : "Export Products CSV"}
+              </button>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* MILESTONE 3: VENDOR BENCHMARKING (Vendor vs Marketplace Average) */}
+          {/* ========================================================================= */}
+          <Panel
+            icon={Scale}
+            eyebrow="Milestone 3 Benchmarking"
+            title="Vendor vs Marketplace Benchmarking"
+            description="Real-time performance benchmark comparing your vendor metrics (Revenue, Orders, Units Sold, Products Listed) against the overall marketplace average."
+          >
+            <VendorBenchmarkPanel benchmark={data.benchmark} />
+          </Panel>
 
           {/* ========================================================================= */}
           {/* 1. INVENTORY HEALTH */}
@@ -1129,11 +1430,11 @@ export default function VendorInsights() {
           <Panel
             stepNumber="3"
             icon={BarChart3}
-            eyebrow="Section 3"
+            eyebrow={`Section 3 · ${reportingScope === "vendor" ? "Vendor Live Sales" : "Marketplace Dataset"}`}
             title="Sales Performance (Day, Week, Month)"
-            description="Spacious revenue and sales volume trends with smooth cubic spline curves and metric toggles."
+            description={`Spacious revenue and sales volume trends (${reportingScope === "vendor" ? "Live Vendor Transactions" : "Marketplace Dataset"}) with smooth cubic spline curves and metric toggles.`}
           >
-            <SpaciousSalesChart data={data.sales} />
+            <SpaciousSalesChart data={reportingData?.salesOverTime || data.sales} />
           </Panel>
 
           {/* ========================================================================= */}
@@ -1142,14 +1443,16 @@ export default function VendorInsights() {
           <Panel
             stepNumber="4"
             icon={Sparkles}
-            eyebrow="Section 4"
+            eyebrow={`Section 4 · ${reportingScope === "vendor" ? "Your Top Products" : "Marketplace Bestsellers"}`}
             title="Sales Performance (Top Products by Sales & Units Sold)"
-            description="Bestselling products ranked by historical sales volume and revenue generation in the dataset."
+            description={`Bestselling products ranked by sales volume and revenue generation in ${reportingScope === "vendor" ? "your vendor catalog" : "the marketplace dataset"}.`}
           >
             <div className="space-y-4">
-              {rows(data.sales?.topProducts).slice(0, 8).map((p, idx) => {
-                const maxUnits = Math.max(1, ...data.sales.topProducts.map((i) => i.unitsSold));
-                const pct = (p.unitsSold / maxUnits) * 100;
+              {rows(reportingData?.topProducts?.products || data.sales?.topProducts).slice(0, 8).map((p, idx) => {
+                const list = rows(reportingData?.topProducts?.products || data.sales?.topProducts);
+                const maxUnits = Math.max(1, ...list.map((i) => Number(i.unitsSold || i.units_sold || 0)));
+                const unitsSold = Number(p.unitsSold || p.units_sold || 0);
+                const pct = (unitsSold / maxUnits) * 100;
                 return (
                   <div
                     key={p.product_id}
@@ -1161,7 +1464,7 @@ export default function VendorInsights() {
                         #{idx + 1}
                       </span>
                       <div className="min-w-0">
-                        <p className="font-semibold text-sm text-[var(--ink)] truncate">{p.product_name}</p>
+                        <p className="font-semibold text-sm text-[var(--ink)] truncate">{p.product_name || p.name}</p>
                         <p className="text-xs text-[var(--ink-soft)]">
                           Category: <span className="font-medium text-emerald-800">{p.category}</span> · ID: {p.product_id}
                         </p>
@@ -1172,7 +1475,7 @@ export default function VendorInsights() {
                       <div className="w-1/2">
                         <div className="flex justify-between text-[11px] mb-1">
                           <span className="text-[var(--ink-soft)]">Volume</span>
-                          <span className="font-bold text-[var(--primary)]">{number(p.unitsSold)} units</span>
+                          <span className="font-bold text-[var(--primary)]">{number(unitsSold)} units</span>
                         </div>
                         <div className="h-2 rounded-full overflow-hidden bg-black/5">
                           <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(5, pct)}%` }} />
@@ -1196,14 +1499,15 @@ export default function VendorInsights() {
           <Panel
             stepNumber="5"
             icon={Layers}
-            eyebrow="Section 5"
+            eyebrow={`Section 5 · ${reportingScope === "vendor" ? "Vendor Category Breakdown" : "Marketplace Category Breakdown"}`}
             title="Revenue by Category"
-            description="Revenue distribution and product sales contribution across all 5 dataset categories."
+            description={`Revenue distribution and product sales contribution across categories in ${reportingScope === "vendor" ? "your sales history" : "the marketplace dataset"}.`}
           >
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {rows(data.sales?.revenueByCategory).map((cat) => {
-                const totalCatRev = data.sales.revenueByCategory.reduce((s, c) => s + Number(c.revenue || 0), 0);
-                const pct = totalCatRev ? Math.round((cat.revenue / totalCatRev) * 100) : 0;
+              {rows(reportingData?.categoryPerformance?.categories || data.sales?.revenueByCategory).map((cat) => {
+                const list = rows(reportingData?.categoryPerformance?.categories || data.sales?.revenueByCategory);
+                const totalCatRev = list.reduce((s, c) => s + Number(c.revenue || 0), 0);
+                const pct = cat.revenueSharePct ?? (totalCatRev ? Math.round((Number(cat.revenue || 0) / totalCatRev) * 100) : 0);
                 return (
                   <div
                     key={cat.category}
@@ -1221,7 +1525,7 @@ export default function VendorInsights() {
                     <div className="mt-4 pt-3 border-t border-black/5">
                       <div className="flex justify-between text-xs mb-1.5">
                         <span className="text-[var(--ink-soft)]">Units Sold:</span>
-                        <span className="font-bold font-mono-stat">{number(cat.unitsSold)}</span>
+                        <span className="font-bold font-mono-stat">{number(cat.unitsSold || cat.units_sold || 0)}</span>
                       </div>
                       <div className="h-2 rounded-full overflow-hidden bg-black/5">
                         <div className="h-full rounded-full bg-amber-600" style={{ width: `${Math.max(5, pct)}%` }} />
