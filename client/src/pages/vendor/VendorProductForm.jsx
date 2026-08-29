@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ImageUp, Sparkles } from "lucide-react";
+import { ImageUp, Sparkles, Loader2, AlertCircle } from "lucide-react";
 import api from "../../lib/api";
 import ProductImage from "../../components/ProductImage";
 
@@ -55,6 +55,8 @@ export default function VendorProductForm() {
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
+  const [descError, setDescError] = useState("");
   const blurTimeout = useRef(null);
   const imageInput = useRef(null);
 
@@ -85,6 +87,26 @@ export default function VendorProductForm() {
       setShowSuggestions(true);
     } else {
       setShowSuggestions(false);
+    }
+  };
+
+  const handleGenerateDescription = async () => {
+    const name = form.name.trim();
+    const category = form.category.trim();
+    if (!name || !category) {
+      setDescError("Enter a product name and category first, then generate a description.");
+      return;
+    }
+    setDescError("");
+    setGeneratingDesc(true);
+    try {
+      const res = await api.post("/ai/generate-description", { name, category });
+      setForm((prev) => ({ ...prev, description: res.data.description }));
+    } catch (err) {
+      const msg = err.response?.data?.error || "AI is temporarily unavailable. You can write the description manually.";
+      setDescError(msg);
+    } finally {
+      setGeneratingDesc(false);
     }
   };
 
@@ -203,18 +225,46 @@ export default function VendorProductForm() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>
-            Description <span style={{ color: "var(--danger)" }}>*</span>
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              Description <span style={{ color: "var(--danger)" }}>*</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleGenerateDescription}
+              disabled={generatingDesc || !form.name.trim() || !form.category.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+              style={{ background: "var(--primary)", color: "white" }}
+              title={!form.name.trim() || !form.category.trim() ? "Enter a product name and category first" : "Generate a professional description with AI"}
+            >
+              {generatingDesc ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} />
+                  Generate with AI
+                </>
+              )}
+            </button>
+          </div>
           <textarea
             required
-            rows={2}
+            rows={3}
             value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Describe your product…"
+            onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescError(""); }}
+            placeholder="Describe your product, or click Generate with AI after entering a name and category…"
             className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring resize-none"
             style={{ border: "1px solid var(--border)" }}
           />
+          {descError && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
+              <AlertCircle size={12} />
+              {descError}
+            </p>
+          )}
         </div>
 
         <div>
@@ -317,14 +367,6 @@ export default function VendorProductForm() {
           </div>
         </div>
 
-        <div className="flex gap-3 rounded-lg p-3 text-xs lg:col-span-2" style={{ background: "var(--accent-soft)", color: "#7a5719" }}>
-          <Sparkles size={16} className="shrink-0 mt-0.5" />
-          <div>
-            <strong>AI features coming soon.</strong> Tags and SEO keywords will be
-            auto-generated when this feature launches — you don't need to add them
-            manually.
-          </div>
-        </div>
 
         <button
           type="submit"

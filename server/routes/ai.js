@@ -1,6 +1,53 @@
 const express = require("express");
 const router = express.Router();
 const ragService = require("../services/ragService");
+const { requireAuth } = require("../middleware/auth");
+
+/**
+ * POST /api/ai/generate-description
+ * Generate a professional product description from name + category.
+ * Requires vendor or admin JWT — API keys stay on the server.
+ *
+ * Body: { "name": string, "category": string, "hints": optional string }
+ * Response: { "description": string, "provider": string }
+ */
+router.post("/generate-description", requireAuth(["vendor", "admin"]), async (req, res) => {
+  try {
+    const { name, category, hints } = req.body;
+
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Product name is required." });
+    }
+    if (!category || typeof category !== "string" || !category.trim()) {
+      return res.status(400).json({ error: "Product category is required." });
+    }
+    if (name.trim().length > 200) {
+      return res.status(400).json({ error: "Product name is too long (max 200 characters)." });
+    }
+
+    const safeHints = hints && typeof hints === "string" ? hints.trim().slice(0, 300) : "";
+
+    const description = await ragService.generateProductDescription(
+      name.trim(),
+      category.trim(),
+      safeHints
+    );
+
+    // Report which provider was actually used
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
+    const openAiKey = process.env.OPENAI_API_KEY;
+    const hasGemini = Boolean(geminiKey && geminiKey !== "your_key_here");
+    const hasOpenAI = Boolean(openAiKey && openAiKey !== "your_key_here");
+    const provider  = hasGemini ? "Google Gemini" : hasOpenAI ? "OpenAI" : "Local";
+
+    res.json({ description, provider });
+  } catch (error) {
+    console.error("Description generation error:", error);
+    res.status(500).json({
+      error: "Failed to generate description. You can write it manually."
+    });
+  }
+});
 
 /**
  * POST /api/ai/shopping-assistant

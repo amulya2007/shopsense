@@ -596,8 +596,154 @@ function buildConversationContext(history = []) {
 }
 
 // ---------------------------------------------------------------------------
-// Main public function
+// Product Description Generator
+// Generates a professional e-commerce description from name + category only.
+// Strictly no invented specs — only uses what the vendor provides.
 // ---------------------------------------------------------------------------
+async function generateProductDescription(name, category, extraHints = "") {
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
+  const openAiKey = process.env.OPENAI_API_KEY;
+
+  // Retrieve similar products from the vector store to populate {{context}}.
+  // These are passed as supporting reference only — the prompt rules instruct the
+  // LLM to ignore context that conflicts with or is unrelated to the product name.
+  let contextBlock = "No similar products found in the catalog.";
+  try {
+    if (isInitialized && vectorStore.length > 0) {
+      const { products: similar } = retrieveProducts(`${name} ${category}`, 3);
+      if (similar.length > 0) {
+        contextBlock = similar.map((p, i) =>
+          `[${i + 1}] Name: ${p.name} | Category: ${p.category} | Description: ${p.description}`
+        ).join("\n");
+      }
+    }
+  } catch (_) {
+    // context is optional — proceed without it
+  }
+
+  // ── Your exact prompt template (variables filled in) ──────────────────────
+  const prompt = `You are an expert e-commerce product description generator.
+
+Your task is to generate an accurate, natural, and useful product description based on the product name provided by the user.
+
+PRODUCT NAME:
+${name}
+
+CATEGORY:
+${category}
+
+RETRIEVED PRODUCT CONTEXT:
+${contextBlock}
+
+IMPORTANT RULES:
+1. The product name is the PRIMARY source of truth.
+2. Generate a description that accurately matches the product name.
+3. Never describe the product as something unrelated to its name.
+4. Retrieved context is only supporting information. If it is unrelated or conflicts with the product name, IGNORE it.
+5. Do not copy descriptions from retrieved products.
+6. Do not invent specific technical specifications, materials, brands, ingredients, features, certifications, or performance claims unless they are explicitly provided.
+7. Do not assume a product belongs to a category just because a retrieved product has that category.
+8. Keep the description concise: 1–3 sentences.
+9. Use professional, customer-friendly e-commerce language.
+10. Return ONLY the product description. Do not include headings, explanations, or JSON.
+
+Examples:
+
+Product name: lipstick
+Category: Beauty
+Output:
+"A cosmetic lip product designed to add rich color and enhance the appearance of the lips. It is suitable for everyday makeup and helps create a polished look."
+
+Product name: wireless headphones
+Category: Audio
+Output:
+"Wireless headphones designed for comfortable everyday listening, offering a convenient way to enjoy music, podcasts, calls, and other audio content without wired connections."
+
+Product name: running shoes
+Category: Footwear
+Output:
+"A pair of athletic shoes designed for running and active use. They provide a comfortable fit and support for everyday workouts and running sessions."
+
+Now generate the description for:
+${name}`;
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // 1. Google Gemini
+  if (geminiKey && geminiKey !== "your_key_here") {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 200 }
+        })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim().length > 10) return text.trim().replace(/^["']|["']$/g, "");
+      }
+    } catch (err) {
+      console.warn("[RAG] Gemini description generation failed:", err.message);
+    }
+  }
+
+  // 2. OpenAI
+  if (openAiKey && openAiKey !== "your_key_here") {
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openAiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.4,
+          max_tokens: 200
+        })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        const text = result.choices?.[0]?.message?.content;
+        if (text && text.trim().length > 10) return text.trim().replace(/^["']|["']$/g, "");
+      }
+    } catch (err) {
+      console.warn("[RAG] OpenAI description generation failed:", err.message);
+    }
+  }
+
+  // 3. Local rule-based fallback — honest, grounded, no invented specs
+  return generateLocalDescription(name, category);
+}
+
+// Local description fallback — generates a grounded description without any LLM
+function generateLocalDescription(name, category) {
+  const cat = (category || "product").toLowerCase();
+  const templates = {
+    audio:       `${name} is an audio product designed for everyday listening.`,
+    electronics: `${name} is an electronics product suitable for home or office use.`,
+    computers:   `${name} is a computing device for personal or professional use.`,
+    accessories: `${name} is a versatile accessory compatible with a range of devices.`,
+    wearables:   `${name} is a wearable device for daily use.`,
+    fashion:     `${name} is a fashion item designed for everyday wear.`,
+    beauty:      `${name} is a personal care product for daily use.`,
+    "home & kitchen": `${name} is a home product suitable for everyday household use.`,
+    home:        `${name} is a home product suitable for everyday use.`,
+    sports:      `${name} is a sports and fitness product for active use.`,
+    groceries:   `${name} is a grocery item for daily consumption.`,
+  };
+
+  for (const [key, template] of Object.entries(templates)) {
+    if (cat.includes(key)) return template;
+  }
+  return `${name} is a quality product available in the ${category} category.`;
+}
+
+
 async function answerShoppingQuestion(question, conversationHistory = []) {
   if (!question || typeof question !== "string" || !question.trim()) {
     throw new Error("A valid question string is required.");
@@ -638,5 +784,6 @@ module.exports = {
   retrieveProducts,
   buildVectorStore,
   buildPopularityIndex,
+  generateProductDescription,
   getVectorStoreCount: () => vectorStore.length
 };
