@@ -1,4 +1,4 @@
-const db = require("../db");
+﻿const db = require("../db");
 
 // ---------------------------------------------------------------------------
 // In-memory Vector Store
@@ -720,30 +720,340 @@ ${name}`;
   return generateLocalDescription(name, category);
 }
 
-// Local description fallback — generates a grounded description without any LLM
+// Local description generator — follows the exact same 10 rules as the LLM prompt.
+// Reads the product name to understand WHAT the product is, then writes a
+// natural 1–2 sentence description without inventing any spec not in the name.
 function generateLocalDescription(name, category) {
-  const cat = (category || "product").toLowerCase();
-  const templates = {
-    audio:       `${name} is an audio product designed for everyday listening.`,
-    electronics: `${name} is an electronics product suitable for home or office use.`,
-    computers:   `${name} is a computing device for personal or professional use.`,
-    accessories: `${name} is a versatile accessory compatible with a range of devices.`,
-    wearables:   `${name} is a wearable device for daily use.`,
-    fashion:     `${name} is a fashion item designed for everyday wear.`,
-    beauty:      `${name} is a personal care product for daily use.`,
-    "home & kitchen": `${name} is a home product suitable for everyday household use.`,
-    home:        `${name} is a home product suitable for everyday use.`,
-    sports:      `${name} is a sports and fitness product for active use.`,
-    groceries:   `${name} is a grocery item for daily consumption.`,
-  };
+  const n   = (name     || "").trim();
+  const cat = (category || "").trim().toLowerCase();
+  const low = n.toLowerCase();
 
-  for (const [key, template] of Object.entries(templates)) {
-    if (cat.includes(key)) return template;
+  // sub() — substring match (safe for multi-word phrases)
+  const sub  = (...words) => words.some(w => low.includes(w));
+  // word() — whole-word match (use for short tokens that appear inside other words)
+  const word = (...words) => words.some(w =>
+    new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(low)
+  );
+
+  // ── Core product identification ──────────────────────────────────────────
+  // Identify WHAT the product IS based solely on the name
+
+  // Beauty & Cosmetics
+  if (sub("lipstick") || sub("lip stick")) {
+    return "A cosmetic lip product designed to add color and enhance the appearance of the lips. Suitable for everyday makeup and helping create a polished look.";
   }
-  return `${name} is a quality product available in the ${category} category.`;
+  if (sub("lip gloss")) {
+    return "A cosmetic lip product designed to add shine and enhance the appearance of the lips.";
+  }
+  if (sub("foundation")) {
+    return "A facial cosmetic product designed to create an even base for makeup application.";
+  }
+  if (sub("concealer")) {
+    return "A facial cosmetic product designed to cover and conceal specific areas during makeup application.";
+  }
+  if (sub("mascara")) {
+    return "A cosmetic product designed to enhance the appearance of eyelashes.";
+  }
+  if (sub("perfume") || sub("fragrance") || sub("cologne")) {
+    return "A scented product designed for personal fragrance use.";
+  }
+  if (sub("shampoo")) {
+    return "A hair care product designed for washing and cleansing hair.";
+  }
+  if (sub("conditioner")) {
+    return "A hair care product designed for use after shampooing.";
+  }
+  if (sub("moisturizer") || sub("lotion")) {
+    return "A skin care product designed for regular application to the skin.";
+  }
+  if (word("cream") && (cat.includes("beauty") || cat.includes("skin"))) {
+    return "A skin care product designed for topical application.";
+  }
+  if (sub("serum") && (cat.includes("beauty") || cat.includes("skin"))) {
+    return "A concentrated skin care product designed for targeted application.";
+  }
+  if (sub("sunscreen") || word("spf")) {
+    return "A skin protection product designed for sun exposure situations.";
+  }
+
+  // Audio Products
+  if (sub("wireless headphone") || (sub("headphone") && (sub("wireless") || word("bluetooth")))) {
+    return "Wireless headphones designed for listening to music, podcasts, calls, and other audio content without wired connections.";
+  }
+  if (sub("headphone") || sub("headset")) {
+    return "Audio headphones designed for listening to music, podcasts, calls, and other audio content.";
+  }
+  if (sub("earbud") || sub("earphone")) {
+    return "Audio earphones designed for personal listening to music, podcasts, and other audio content.";
+  }
+  if (sub("speaker")) {
+    return "An audio speaker designed for playing music and other audio content.";
+  }
+  if (sub("soundbar")) {
+    return "An audio device designed to enhance sound output for entertainment systems.";
+  }
+  if (sub("microphone") || word("mic")) {
+    return "A microphone designed for capturing and recording audio input.";
+  }
+
+  // Computing
+  if (word("gaming") && (sub("laptop") || sub("notebook"))) {
+    return "A laptop computer designed for gaming and high-performance computing tasks.";
+  }
+  if (sub("laptop")) {
+    return "A laptop computer designed for everyday computing tasks including work, study, and general use.";
+  }
+  // "notebook" only as laptop if category suggests computing
+  if (sub("notebook") && (cat.includes("comput") || cat.includes("electronic") || cat.includes("tech"))) {
+    return "A laptop computer designed for everyday computing tasks including work, study, and general use.";
+  }
+  if (sub("desktop")) {
+    return "A desktop computer designed for computing tasks in a stationary workspace.";
+  }
+  if (sub("tablet")) {
+    return "A tablet computing device designed for digital tasks including browsing, media consumption, and everyday use.";
+  }
+  if (sub("keyboard")) {
+    return "A keyboard input device designed for typing and data entry.";
+  }
+  if (word("mouse") && !sub("pad")) {
+    return "A computer mouse designed for cursor navigation and input control.";
+  }
+  if (sub("monitor") || (word("display") && cat.includes("compute"))) {
+    return "A display monitor designed for visual output from computing devices.";
+  }
+  if (sub("webcam")) {
+    return "A webcam designed for video capture during video calls and recording.";
+  }
+  if (sub("router")) {
+    return "A network router designed to manage and distribute internet connectivity.";
+  }
+  if (sub("hard drive") || word("hdd") || word("ssd") || sub("storage drive")) {
+    return "A data storage drive designed for storing digital files and information.";
+  }
+  if (sub("power bank")) {
+    return "A portable power bank designed to recharge electronic devices.";
+  }
+  if (word("charger")) {
+    return "A charging device designed to power electronic devices.";
+  }
+  if (sub("usb hub")) {
+    return "A USB hub designed to expand available USB ports for connecting devices.";
+  }
+  if (word("cable") && (cat.includes("compute") || cat.includes("electronic") || cat.includes("accessory"))) {
+    return "A cable designed for connecting electronic devices.";
+  }
+
+  // Wearables
+  if (sub("smartwatch") || sub("smart watch")) {
+    return "A smartwatch designed as a wearable device for time display and digital features.";
+  }
+  if (sub("fitness band") || sub("fitness tracker")) {
+    return "A fitness tracker designed as a wearable device for activity monitoring.";
+  }
+  if (sub("smart band")) {
+    return "A smart band designed as a wearable device with digital features.";
+  }
+  if (word("watch") && !sub("smart")) {
+    return "A watch designed for timekeeping and personal wear.";
+  }
+
+  // Phones & Accessories
+  if (sub("smartphone") || sub("mobile phone")) {
+    return "A smartphone designed for communication, digital tasks, and mobile computing.";
+  }
+  if (sub("phone case")) {
+    return "A phone case designed to protect mobile devices.";
+  }
+  if (sub("screen protector")) {
+    return "A screen protector designed to shield device displays from damage.";
+  }
+
+  // Electronics
+  if (word("camera")) {
+    return "A camera designed for capturing photographs and video recordings.";
+  }
+  if (sub("projector")) {
+    return "A projector designed to display visual content on screens or surfaces.";
+  }
+  if (word("tv") || sub("television")) {
+    return "A television designed for viewing broadcast, streaming, and video content.";
+  }
+  if (word("drone")) {
+    return "A drone designed as a flying device for aerial use.";
+  }
+  if (sub("printer")) {
+    return "A printer designed to produce physical copies of digital documents and images.";
+  }
+  if (sub("scanner")) {
+    return "A scanner designed to digitize physical documents and images.";
+  }
+
+  // Footwear
+  if (sub("running shoe") || (word("shoe") && word("running"))) {
+    return "A pair of athletic shoes designed for running and athletic activities.";
+  }
+  if (sub("sneaker") || word("trainers")) {
+    return "A pair of sneakers designed for casual and athletic wear.";
+  }
+  if (word("shoe") || word("shoes")) {
+    return "A pair of shoes designed for everyday footwear use.";
+  }
+  if (word("boot") || word("boots")) {
+    return "A pair of boots designed for footwear protection and style.";
+  }
+  if (word("sandal") || word("sandals")) {
+    return "A pair of sandals designed as open footwear for casual wear.";
+  }
+
+  // Fashion & Apparel
+  if (sub("t-shirt") || sub("tshirt") || (word("shirt") && cat.includes("fashion"))) {
+    return "A shirt designed for casual and everyday wear.";
+  }
+  if (sub("trouser") || word("pant") || word("pants")) {
+    return "A pair of trousers designed for everyday clothing wear.";
+  }
+  if (sub("jacket")) {
+    return "A jacket designed as an outer garment for layering and wear.";
+  }
+  if (word("coat")) {
+    return "A coat designed as outerwear for protection and style.";
+  }
+  if (word("dress") && cat.includes("fashion")) {
+    return "A dress designed as a one-piece garment for wear.";
+  }
+  if (sub("backpack")) {
+    return "A backpack designed for carrying items on the back during daily activities.";
+  }
+  if (sub("handbag") || (word("bag") && cat.includes("fashion"))) {
+    return "A bag designed for carrying personal items and essentials.";
+  }
+  if (sub("wallet")) {
+    return "A wallet designed to hold cards, cash, and personal items.";
+  }
+  if (word("belt")) {
+    return "A belt designed as an accessory for securing clothing at the waist.";
+  }
+  if (sub("sunglasses") || (word("glasses") && cat.includes("fashion"))) {
+    return "Eyewear designed for sun protection and style.";
+  }
+
+  // Home & Kitchen
+  if (sub("coffee maker") || sub("coffee machine")) {
+    return "A coffee maker designed for brewing coffee beverages.";
+  }
+  if (sub("water bottle")) {
+    return "A water bottle designed for storing and carrying drinking water.";
+  }
+  if (word("bottle") && !sub("water")) {
+    return "A bottle designed for storing and transporting liquids.";
+  }
+  if (word("mug") || (word("cup") && cat.includes("home"))) {
+    return "A mug designed for holding and drinking hot and cold beverages.";
+  }
+  if (sub("plate") || word("bowl") || word("dish")) {
+    return "Kitchenware designed for serving and holding food.";
+  }
+  if (sub("cutlery") || (word("knife") && cat.includes("kitchen"))) {
+    return "Cutlery designed for eating and food preparation.";
+  }
+  if (word("pan") || word("pot") || sub("cookware")) {
+    return "Cookware designed for preparing and cooking food.";
+  }
+  if (sub("blender") || sub("juicer") || word("mixer")) {
+    return "A kitchen appliance designed for blending and mixing food ingredients.";
+  }
+  if (sub("toaster") || sub("microwave") || (word("oven") && cat.includes("kitchen"))) {
+    return "A kitchen appliance designed for heating and cooking food.";
+  }
+  if (sub("kettle")) {
+    return "A kettle designed for heating water and liquids.";
+  }
+  if (sub("pillow") || sub("cushion")) {
+    return "A cushion designed for comfort and support during rest.";
+  }
+  if (word("lamp") || (word("light") && cat.includes("home"))) {
+    return "A lamp designed to provide illumination in indoor spaces.";
+  }
+  if (word("chair")) {
+    return "A chair designed as seating furniture for everyday use.";
+  }
+  if (word("desk") || word("table")) {
+    return "A table designed as furniture for work, dining, or general use.";
+  }
+  if (sub("bookcase") || word("shelf") || word("shelves")) {
+    return "A shelf unit designed for storage and display of items.";
+  }
+  if (sub("clock")) {
+    return "A clock designed for timekeeping and display.";
+  }
+  if (sub("vacuum")) {
+    return "A vacuum cleaner designed for cleaning floors and surfaces.";
+  }
+
+  // Sports & Fitness
+  if (sub("yoga mat")) {
+    return "A yoga mat designed for yoga practice and floor exercises.";
+  }
+  if (sub("dumbbell") || sub("barbell") || (word("weight") && cat.includes("sport"))) {
+    return "Fitness equipment designed for strength training exercises.";
+  }
+  if (sub("resistance band")) {
+    return "A resistance band designed for strength and flexibility exercises.";
+  }
+  if (sub("bicycle") || word("bike") || word("cycle")) {
+    return "A bicycle designed for cycling and transportation.";
+  }
+  if (sub("treadmill")) {
+    return "A treadmill designed as exercise equipment for indoor running and walking.";
+  }
+  if (sub("helmet")) {
+    return "A helmet designed for head protection during activities.";
+  }
+
+  // Groceries & Food
+  if (sub("snack") || sub("chips") || sub("biscuit") || sub("cookie")) {
+    return "A snack food item designed for consumption between meals.";
+  }
+  if ((word("oil") || word("sauce") || word("spice")) && cat.includes("grocer")) {
+    return "A food ingredient designed for cooking and meal preparation.";
+  }
+  if ((word("coffee") || word("tea")) && cat.includes("grocer")) {
+    return "A beverage product designed for drinking.";
+  }
+
+  // ── Generic fallback based on category ───────────────────────────────────
+  if (cat.includes("audio")) {
+    return `An audio product designed for listening and sound-related activities.`;
+  }
+  if (cat.includes("electronics") || cat.includes("electronic")) {
+    return `An electronics product designed for everyday use.`;
+  }
+  if (cat.includes("compute") || cat.includes("computer")) {
+    return `A computing product designed for digital tasks and everyday use.`;
+  }
+  if (cat.includes("wearable")) {
+    return `A wearable device designed for personal wear and digital features.`;
+  }
+  if (cat.includes("fashion") || cat.includes("apparel") || cat.includes("clothing")) {
+    return `A fashion item designed for everyday wear.`;
+  }
+  if (cat.includes("beauty") || cat.includes("cosmetic")) {
+    return `A personal care product designed for everyday grooming and beauty use.`;
+  }
+  if (cat.includes("home") || cat.includes("kitchen")) {
+    return `A home product designed for everyday household use.`;
+  }
+  if (cat.includes("sport") || cat.includes("fitness")) {
+    return `A sports product designed for physical activity and exercise.`;
+  }
+  if (cat.includes("grocer") || cat.includes("food")) {
+    return `A food product designed for consumption.`;
+  }
+
+  // ── Absolute fallback ─────────────────────────────────────────────────────
+  return `A product designed for everyday use.`;
 }
-
-
 async function answerShoppingQuestion(question, conversationHistory = []) {
   if (!question || typeof question !== "string" || !question.trim()) {
     throw new Error("A valid question string is required.");

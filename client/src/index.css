@@ -240,3 +240,37 @@ h1, h2, h3, .font-display {
 @media (min-width: 1536px) {
   .insights-page { max-width: 88rem; }
 }
+
+/* Product Card Utilities */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Smooth hover transitions for product cards */
+.product-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(14, 75, 68, 0.12);
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

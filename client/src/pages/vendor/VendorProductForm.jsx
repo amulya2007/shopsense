@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ImageUp, Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { ImageUp, Sparkles, Loader2, AlertCircle, Package, DollarSign, Archive, Image as ImageIcon } from "lucide-react";
 import api from "../../lib/api";
 import ProductImage from "../../components/ProductImage";
 
@@ -150,232 +150,335 @@ export default function VendorProductForm() {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto lg:h-full lg:flex lg:flex-col">
-      <h1 className="font-display text-2xl font-bold mb-1">{isEdit ? "Edit product" : "Add new product"}</h1>
-      <p className="text-sm mb-4" style={{ color: "var(--ink-soft)" }}>
-        Fill in the details below to {isEdit ? "update this listing" : "list a new product in your catalog"}.
-      </p>
+    <div className="w-full max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-bold mb-1">
+          {isEdit ? "Edit Product" : "Add New Product"}
+        </h1>
+        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+          {isEdit ? "Update your product listing details" : "Create a new product listing for your catalog"}
+        </p>
+      </div>
 
-
+      {/* Error Message */}
       {error && (
-        <div className="mb-4 text-sm px-4 py-3 rounded-lg" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
-          {error}
+        <div className="mb-6 text-sm px-4 py-3 rounded-lg flex items-start gap-2" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 rounded-2xl p-5 sm:p-6 lg:grid-cols-2 lg:gap-3 lg:p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-        <div className="relative">
-          <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>
-            Product name <span style={{ color: "var(--danger)" }}>*</span>
-          </label>
-          <input
-            required
-            value={form.name}
-            onChange={handleNameChange}
-            onFocus={() => form.name && setShowSuggestions(true)}
-            onBlur={() => { blurTimeout.current = setTimeout(() => setShowSuggestions(false), 120); }}
-            placeholder="e.g. Wireless Bluetooth Headphones"
-            className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring"
-            style={{ border: "1px solid var(--border)" }}
-          />
-          {showSuggestions && suggestions.length > 0 && (
-            <ul
-              className="absolute z-20 w-full mt-1 rounded-lg overflow-hidden text-sm shadow-xl"
-              style={{ background: "var(--sidebar)", border: "1px solid var(--border)" }}
-            >
-              {suggestions.map((s, idx) => {
-                const name = typeof s === "object" ? s.name : s;
-                const cat = typeof s === "object" ? s.category : "";
-                const price = typeof s === "object" ? s.price : null;
-                const origin = typeof s === "object" && s.origin === "dataset" ? "Dataset" : "";
-                return (
-                  <li
-                    key={`${name}-${idx}`}
-                    onMouseDown={() => {
-                      if (typeof s === "object" && s !== null) {
-                        setForm((prev) => ({
-                          ...prev,
-                          name: s.name || prev.name,
-                          category: s.category || prev.category,
-                          price: s.price != null ? String(s.price) : prev.price,
-                          stock: s.stock != null ? String(s.stock) : prev.stock,
-                          description: prev.description || `${s.name} - high quality ${s.category?.toLowerCase() || "item"} from catalog.`
-                        }));
-                      } else {
-                        setForm((prev) => ({ ...prev, name: s }));
-                      }
-                      setShowSuggestions(false);
-                    }}
-                    className="px-4 py-2.5 cursor-pointer text-white hover:bg-white/10 flex items-center justify-between transition-colors border-b border-white/5 last:border-0"
-                  >
-                    <div>
-                      <div className="font-medium text-white">{name}</div>
-                      {cat && <div className="text-xs text-white/60">{cat} {price ? `· ₹${price}` : ""}</div>}
-                    </div>
-                    {origin && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
-                        {origin}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-              Description <span style={{ color: "var(--danger)" }}>*</span>
-            </label>
-            <button
-              type="button"
-              onClick={handleGenerateDescription}
-              disabled={generatingDesc || !form.name.trim() || !form.category.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Product Information Section */}
+        <div className="rounded-xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-5 pb-4" style={{ borderBottom: "1px solid var(--border)" }}>
+            <div 
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ background: "var(--primary)", color: "white" }}
-              title={!form.name.trim() || !form.category.trim() ? "Enter a product name and category first" : "Generate a professional description with AI"}
             >
-              {generatingDesc ? (
-                <>
-                  <Loader2 size={12} className="animate-spin" />
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={12} />
-                  Generate with AI
-                </>
-              )}
-            </button>
-          </div>
-          <textarea
-            required
-            rows={3}
-            value={form.description}
-            onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescError(""); }}
-            placeholder="Describe your product, or click Generate with AI after entering a name and category…"
-            className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring resize-none"
-            style={{ border: "1px solid var(--border)" }}
-          />
-          {descError && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
-              <AlertCircle size={12} />
-              {descError}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>
-            Category <span style={{ color: "var(--danger)" }}>*</span>
-          </label>
-          <input
-            type="text"
-            required
-            value={form.category}
-            onChange={(e) => {
-              const value = e.target.value;
-              setForm({ ...form, category: value === "Other" ? "" : value });
-            }}
-            list="product-categories"
-            placeholder="Choose a category or type your own"
-            className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring"
-            style={{ border: "1px solid var(--border)" }}
-          />
-          <datalist id="product-categories">
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </datalist>
-          <p className="mt-1.5 text-xs" style={{ color: "var(--ink-soft)" }}>
-            Select Other to type a custom category in this same field.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>
-              Price (INR) <span style={{ color: "var(--danger)" }}>*</span>
-            </label>
-            <input
-              required
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="0.00"
-              className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring"
-              style={{ border: "1px solid var(--border)" }}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>
-              Stock quantity
-            </label>
-            <input
-              type="number"
-              min="0"
-              value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: e.target.value })}
-              placeholder="0"
-              className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring"
-              style={{ border: "1px solid var(--border)" }}
-            />
-          </div>
-        </div>
-
-        <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>Product image <span className="normal-case font-normal">(optional)</span></label>
-            {form.imageUrl && <span className="text-xs font-medium" style={{ color: "var(--success)" }}>Image ready</span>}
-          </div>
-          <div
-            className="rounded-xl border-2 border-dashed p-2.5 sm:p-3 transition"
-            style={{ borderColor: isDraggingImage ? "var(--primary)" : "var(--border)", background: isDraggingImage ? "var(--success-soft)" : "var(--surface)" }}
-            onDragEnter={(event) => { event.preventDefault(); setIsDraggingImage(true); }}
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={() => setIsDraggingImage(false)}
-            onDrop={(event) => { event.preventDefault(); uploadImage(event.dataTransfer.files[0]); }}
-          >
-            <div className="flex items-center gap-3 text-left">
-              <div className="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: "var(--card)", color: "var(--primary)", border: "1px solid var(--border)" }}>
-                {form.imageUrl ? <ProductImage src={form.imageUrl} alt="Product preview" /> : <ImageUp size={21} />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">Drop a photo here</p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>JPG, PNG, WebP, or GIF · up to 5 MB</p>
-              </div>
-            <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={(event) => uploadImage(event.target.files[0])} />
-            <button type="button" onClick={() => imageInput.current?.click()} disabled={uploadingImage} className="shrink-0 px-3 py-2 rounded-lg text-xs font-semibold focus-ring disabled:opacity-60" style={{ background: "var(--primary)", color: "white" }}>
-              {uploadingImage ? "Uploading…" : "Choose image"}
-            </button>
+              <Package size={16} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-base">Product Information</h2>
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Basic details about your product</p>
             </div>
           </div>
-          <div className="mt-2">
-            <label className="block text-xs font-medium mb-1" style={{ color: "var(--primary)" }}>Or paste a direct image link</label>
-            <input
-              type="url"
-              value={form.imageUrl.startsWith("data:") ? "" : form.imageUrl}
-              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              placeholder="https://example.com/product-image.jpg"
-              className="w-full px-3.5 py-2 rounded-lg text-sm focus-ring"
-              style={{ border: "1px solid var(--border)", background: "var(--card)" }}
-            />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Product Name */}
+            <div className="relative lg:col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
+                Product Name <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <input
+                required
+                value={form.name}
+                onChange={handleNameChange}
+                onFocus={() => form.name && setShowSuggestions(true)}
+                onBlur={() => { blurTimeout.current = setTimeout(() => setShowSuggestions(false), 120); }}
+                placeholder="e.g. Wireless Bluetooth Headphones"
+                className="w-full px-4 py-3 rounded-lg text-sm focus-ring"
+                style={{ border: "1px solid var(--border)" }}
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <ul
+                  className="absolute z-20 w-full mt-1 rounded-lg overflow-hidden text-sm shadow-xl"
+                  style={{ background: "var(--sidebar)", border: "1px solid var(--border)" }}
+                >
+                  {suggestions.map((s, idx) => {
+                    const name = typeof s === "object" ? s.name : s;
+                    const cat = typeof s === "object" ? s.category : "";
+                    const price = typeof s === "object" ? s.price : null;
+                    const origin = typeof s === "object" && s.origin === "dataset" ? "Dataset" : "";
+                    return (
+                      <li
+                        key={`${name}-${idx}`}
+                        onMouseDown={() => {
+                          if (typeof s === "object" && s !== null) {
+                            setForm((prev) => ({
+                              ...prev,
+                              name: s.name || prev.name,
+                              category: s.category || prev.category,
+                              price: s.price != null ? String(s.price) : prev.price,
+                              stock: s.stock != null ? String(s.stock) : prev.stock,
+                              description: prev.description || `${s.name} - high quality ${s.category?.toLowerCase() || "item"} from catalog.`
+                            }));
+                          } else {
+                            setForm((prev) => ({ ...prev, name: s }));
+                          }
+                          setShowSuggestions(false);
+                        }}
+                        className="px-4 py-2.5 cursor-pointer text-white hover:bg-white/10 flex items-center justify-between transition-colors border-b border-white/5 last:border-0"
+                      >
+                        <div>
+                          <div className="font-medium text-white">{name}</div>
+                          {cat && <div className="text-xs text-white/60">{cat} {price ? `· ₹${price}` : ""}</div>}
+                        </div>
+                        {origin && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
+                            {origin}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
+                Category <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <select
+                required
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className="w-full px-4 py-3 rounded-lg text-sm focus-ring"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                <option value="">Select a category</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Description with AI */}
+            <div className="lg:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+                  Description <span style={{ color: "var(--danger)" }}>*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleGenerateDescription}
+                  disabled={generatingDesc || !form.name.trim() || !form.category.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                  style={{ background: "var(--primary)", color: "white" }}
+                  title={!form.name.trim() || !form.category.trim() ? "Enter product name and category first" : "Generate description with AI"}
+                >
+                  {generatingDesc ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} />
+                      Generate with AI
+                    </>
+                  )}
+                </button>
+              </div>
+              <textarea
+                required
+                rows={4}
+                value={form.description}
+                onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescError(""); }}
+                placeholder="Describe your product features, benefits, and key details..."
+                className="w-full px-4 py-3 rounded-lg text-sm focus-ring resize-none"
+                style={{ border: "1px solid var(--border)" }}
+              />
+              {descError && (
+                <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
+                  <AlertCircle size={12} />
+                  {descError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Pricing & Inventory Section */}
+        <div className="rounded-xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-5 pb-4" style={{ borderBottom: "1px solid var(--border)" }}>
+            <div 
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: "var(--accent)", color: "#0d1e1a" }}
+            >
+              <DollarSign size={16} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-base">Pricing & Inventory</h2>
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Set your product price and stock levels</p>
+            </div>
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-60 focus-ring lg:col-span-2"
-          style={{ background: "var(--primary)" }}
-        >
-          {loading ? "Saving…" : isEdit ? "Save changes" : "Add to catalog"}
-        </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
+                Price (INR) <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold" style={{ color: "var(--ink-soft)" }}>₹</span>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-4 py-3 rounded-lg text-sm focus-ring font-mono-stat"
+                  style={{ border: "1px solid var(--border)" }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
+                Stock Quantity <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <input
+                required
+                type="number"
+                min="0"
+                value={form.stock}
+                onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                placeholder="0"
+                className="w-full px-4 py-3 rounded-lg text-sm focus-ring"
+                style={{ border: "1px solid var(--border)" }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Media Section */}
+        <div className="rounded-xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-5 pb-4" style={{ borderBottom: "1px solid var(--border)" }}>
+            <div 
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: "var(--success)", color: "white" }}
+            >
+              <ImageIcon size={16} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-base">Product Media</h2>
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Add images to showcase your product</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
+              Product Image <span className="normal-case font-normal text-[10px]">(optional)</span>
+            </label>
+            
+            {/* Image Upload Area */}
+            <div
+              className="rounded-xl border-2 border-dashed p-6 transition-all"
+              style={{ 
+                borderColor: isDraggingImage ? "var(--primary)" : "var(--border)", 
+                background: isDraggingImage ? "var(--primary-light)/10" : "var(--surface)" 
+              }}
+              onDragEnter={(event) => { event.preventDefault(); setIsDraggingImage(true); }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={() => setIsDraggingImage(false)}
+              onDrop={(event) => { event.preventDefault(); uploadImage(event.dataTransfer.files[0]); }}
+            >
+              <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                <div 
+                  className="w-20 h-20 shrink-0 rounded-xl flex items-center justify-center overflow-hidden" 
+                  style={{ background: "var(--card)", border: "2px solid var(--border)" }}
+                >
+                  {form.imageUrl ? (
+                    <ProductImage src={form.imageUrl} alt="Product preview" />
+                  ) : (
+                    <ImageUp size={32} style={{ color: "var(--ink-soft)" }} />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold mb-1">
+                    {form.imageUrl ? "Image uploaded" : "Drop your product image here"}
+                  </p>
+                  <p className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
+                    JPG, PNG, WebP, or GIF · Maximum 5 MB
+                  </p>
+                  <input 
+                    ref={imageInput} 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(event) => uploadImage(event.target.files[0])} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => imageInput.current?.click()} 
+                    disabled={uploadingImage} 
+                    className="px-4 py-2 rounded-lg text-xs font-semibold focus-ring disabled:opacity-60 transition-all hover:opacity-90" 
+                    style={{ background: "var(--primary)", color: "white" }}
+                  >
+                    {uploadingImage ? "Uploading…" : form.imageUrl ? "Change image" : "Choose image"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Image URL Input */}
+            <div className="mt-4">
+              <label className="block text-xs font-medium mb-2" style={{ color: "var(--primary)" }}>
+                Or paste an image URL
+              </label>
+              <input
+                type="url"
+                value={form.imageUrl.startsWith("data:") ? "" : form.imageUrl}
+                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                placeholder="https://example.com/product-image.jpg"
+                className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring"
+                style={{ border: "1px solid var(--border)" }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/vendor/catalog")}
+            className="px-6 py-3 rounded-lg text-sm font-semibold focus-ring transition-all hover:opacity-80"
+            style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 rounded-lg py-3 text-sm font-semibold text-white disabled:opacity-60 focus-ring transition-all hover:opacity-90"
+            style={{ background: "var(--primary)" }}
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 size={16} className="animate-spin" />
+                Saving…
+              </span>
+            ) : (
+              isEdit ? "Save changes" : "Add to catalog"
+            )}
+          </button>
+        </div>
       </form>
     </div>
   );
