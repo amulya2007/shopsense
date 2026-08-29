@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Bot,
   Send,
@@ -6,14 +6,10 @@ import {
   RefreshCw,
   Package,
   CheckCircle2,
-  AlertCircle,
-  Tag,
-  Boxes,
   HelpCircle,
-  Zap,
-  Store,
-  Layers,
-  ChevronRight
+  TrendingUp,
+  AlertCircle,
+  Info
 } from "lucide-react";
 import api from "../../lib/api";
 
@@ -26,21 +22,52 @@ function formatINR(val) {
   }).format(val);
 }
 
-const EXAMPLE_PROMPTS = [
-  "What laptop is best for video editing?",
+const SUGGESTED_QUESTIONS = [
+  "What products are available in Electronics?",
   "Show electronics under ₹50,000.",
   "Which products are currently in stock?",
   "What is the cheapest product in Audio?",
-  "Recommend popular products for a student.",
-  "What products are available in Electronics?"
+  "Which products are popular?",
+  "What laptop options are available?",
+  "Show products between ₹10,000 and ₹30,000.",
+  "Show me products that are out of stock."
 ];
+
+// Render markdown-style bold text (**text**) without a heavy library
+function MarkdownText({ text }) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function MessageText({ text }) {
+  if (!text) return null;
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed">
+      {text.split("\n").map((line, i) => (
+        <p key={i} className={line.trim() === "" ? "h-2" : ""}>
+          <MarkdownText text={line} />
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function VendorAssistant() {
   const [messages, setMessages] = useState([
     {
       id: "welcome",
       sender: "ai",
-      text: "Hello! I am your **ShopSense AI Shopping Assistant**, powered by Retrieval-Augmented Generation (RAG). I can help you search, compare, and recommend products from our live SQLite catalog with strict grounding.",
+      text: "Hello! I'm your **ShopSense AI Shopping Assistant**.\n\nI can help you discover products, compare prices, check stock availability, and find the best options across our catalog of 10,000+ items — all grounded in real database data.\n\nTry one of the suggested questions below, or ask me anything about the catalog.",
       products: [],
       sources: []
     }
@@ -51,17 +78,26 @@ export default function VendorAssistant() {
   const [error, setError] = useState("");
   const chatBottomRef = useRef(null);
 
-  // Fetch AI status on mount
   useEffect(() => {
     api.get("/ai/status")
       .then((res) => setStatus(res.data))
-      .catch(() => setStatus({ status: "online", vectorStoreReady: true, indexedProducts: 10009 }));
+      .catch(() => setStatus({ status: "online", vectorStoreReady: true, indexedProducts: null }));
   }, []);
 
-  // Auto-scroll to bottom of chat
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Build lightweight conversation history from last 4 AI turns (for follow-up context)
+  const buildHistory = useCallback((currentMessages) => {
+    return currentMessages
+      .filter((m) => m.sender === "ai" && m.products && m.products.length > 0)
+      .slice(-2)
+      .map((m) => ({
+        role: "assistant",
+        products: m.products.map((p) => ({ name: p.name, category: p.category }))
+      }));
+  }, []);
 
   const handleSend = async (questionText = input) => {
     const q = String(questionText || "").trim();
@@ -76,11 +112,22 @@ export default function VendorAssistant() {
       text: q
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      const next = [...prev, userMessage];
+      return next;
+    });
+
     setLoading(true);
 
     try {
-      const res = await api.post("/ai/shopping-assistant", { question: q });
+      // Capture history before adding the new user message
+      const history = buildHistory(messages);
+
+      const res = await api.post("/ai/shopping-assistant", {
+        question: q,
+        conversationHistory: history
+      });
+
       const aiMessage = {
         id: `ai-${Date.now()}`,
         sender: "ai",
@@ -91,14 +138,16 @@ export default function VendorAssistant() {
       setMessages((prev) => [...prev, aiMessage]);
     } catch (err) {
       console.error("AI Assistant error:", err);
-      const errMsg = err.response?.data?.error || "AI Shopping Assistant is temporarily unavailable. Please try again.";
+      const errMsg =
+        err.response?.data?.error ||
+        "The AI Shopping Assistant is temporarily unavailable. Please try again.";
       setError(errMsg);
       setMessages((prev) => [
         ...prev,
         {
           id: `ai-err-${Date.now()}`,
           sender: "ai",
-          text: `⚠️ **Error:** ${errMsg}`,
+          text: `⚠️ ${errMsg}`,
           isError: true,
           products: [],
           sources: []
@@ -117,11 +166,12 @@ export default function VendorAssistant() {
   };
 
   const clearChat = () => {
+    setError("");
     setMessages([
       {
         id: `welcome-${Date.now()}`,
         sender: "ai",
-        text: "Chat cleared! How can I assist with your catalog discovery today?",
+        text: "Chat cleared. How can I help you explore the ShopSense catalog today?",
         products: [],
         sources: []
       }
@@ -129,51 +179,69 @@ export default function VendorAssistant() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 pb-12">
-      {/* Top Banner */}
-      <header className="rounded-2xl p-6 relative overflow-hidden text-white shadow-sm" style={{ background: "linear-gradient(135deg, #0E4B44 0%, #15665c 100%)" }}>
+    <div className="mx-auto w-full max-w-6xl space-y-5 pb-12">
+
+      {/* Header Banner */}
+      <header
+        className="rounded-2xl p-6 relative overflow-hidden text-white shadow-sm"
+        style={{ background: "linear-gradient(135deg, #0E4B44 0%, #15665c 100%)" }}
+      >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 text-white">
-                <Sparkles size={13} className="text-amber-300" /> RAG System Active
+                <Sparkles size={12} className="text-amber-300" /> RAG System Active
               </span>
-              <span className="text-[11px] font-semibold text-white/80">
-                10,000+ SQLite Products Indexed
-              </span>
+              {status?.indexedProducts && (
+                <span className="text-[11px] font-semibold text-white/70">
+                  {status.indexedProducts.toLocaleString()} products indexed
+                </span>
+              )}
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold">AI Shopping Assistant</h1>
             <p className="mt-1 text-sm text-white/80 max-w-xl">
-              Ask natural-language questions to discover, filter, and compare products grounded directly in the ShopSense database.
+              Ask natural-language questions to discover, filter, and compare products grounded in the ShopSense catalog.
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            {status && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/70">
+                <span className={`h-2 w-2 rounded-full ${status.vectorStoreReady ? "bg-emerald-400" : "bg-amber-400"}`} />
+                {status.provider || "Local RAG"}
+              </span>
+            )}
             <button
               type="button"
               onClick={clearChat}
               className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold bg-white/10 hover:bg-white/20 transition-all text-white border border-white/15"
             >
-              <RefreshCw size={13} /> Clear Chat
+              <RefreshCw size={13} /> Clear
             </button>
           </div>
         </div>
       </header>
 
-      {/* Suggested Quick Starters */}
-      <div className="flex flex-col gap-2 p-4 rounded-2xl border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--ink-soft)]">
-          <HelpCircle size={14} className="text-emerald-700" /> Suggested Inquiries:
+      {/* Suggested Questions */}
+      <div
+        className="flex flex-col gap-2.5 p-4 rounded-2xl border"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--ink-soft)" }}>
+          <HelpCircle size={13} className="text-emerald-700" /> Try asking:
         </div>
         <div className="flex flex-wrap gap-2">
-          {EXAMPLE_PROMPTS.map((prompt) => (
+          {SUGGESTED_QUESTIONS.map((prompt) => (
             <button
               key={prompt}
               type="button"
               disabled={loading}
               onClick={() => handleSend(prompt)}
-              className="rounded-lg px-3 py-1.5 text-xs font-medium text-left transition-all border hover:border-emerald-700/40 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 disabled:opacity-50"
-              style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink)" }}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-left transition-all border hover:border-emerald-700/50 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/20 disabled:opacity-50"
+              style={{
+                background: "var(--surface)",
+                borderColor: "var(--border)",
+                color: "var(--ink)"
+              }}
             >
               {prompt}
             </button>
@@ -181,21 +249,47 @@ export default function VendorAssistant() {
         </div>
       </div>
 
-      {/* Main Chat Container */}
-      <div className="rounded-2xl border shadow-sm flex flex-col h-[640px]" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        {/* Messages Scroll Area */}
+      {/* Error banner (above chat) */}
+      {error && (
+        <div
+          className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
+          style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
+        >
+          <AlertCircle size={15} />
+          <span>{error}</span>
+          <button
+            className="ml-auto text-xs font-semibold underline"
+            onClick={() => setError("")}
+            type="button"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Chat Container */}
+      <div
+        className="rounded-2xl border shadow-sm flex flex-col"
+        style={{
+          background: "var(--card)",
+          borderColor: "var(--border)",
+          minHeight: "480px",
+          maxHeight: "680px"
+        }}
+      >
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {messages.map((msg) => (
             <div
               key={msg.id}
               className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}
             >
-              {/* Message Header */}
-              <div className="flex items-center gap-2 mb-1 text-xs text-[var(--ink-soft)] font-medium">
+              {/* Avatar + label */}
+              <div className="flex items-center gap-2 mb-1.5 text-xs font-medium" style={{ color: "var(--ink-soft)" }}>
                 {msg.sender === "ai" ? (
                   <>
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-white text-[10px] font-bold">
-                      <Bot size={12} />
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-white">
+                      <Bot size={11} />
                     </span>
                     <span>ShopSense Assistant</span>
                   </>
@@ -204,63 +298,80 @@ export default function VendorAssistant() {
                 )}
               </div>
 
-              {/* Message Bubble */}
+              {/* Bubble */}
               <div
-                className={`rounded-2xl p-4 sm:p-5 max-w-3xl text-sm leading-relaxed ${
+                className={`rounded-2xl px-4 py-3.5 sm:px-5 max-w-3xl ${
                   msg.sender === "user"
-                    ? "text-white rounded-br-none shadow-sm"
+                    ? "rounded-br-none shadow-sm text-white"
                     : "border rounded-tl-none shadow-sm"
-                }`}
+                } ${msg.isError ? "border-red-200 bg-red-50 dark:bg-red-950/20" : ""}`}
                 style={{
-                  background: msg.sender === "user" ? "var(--primary)" : "var(--surface)",
-                  borderColor: msg.sender === "user" ? "transparent" : "var(--border)",
+                  background: msg.isError
+                    ? undefined
+                    : msg.sender === "user"
+                    ? "var(--primary)"
+                    : "var(--surface)",
+                  borderColor:
+                    msg.sender === "user" ? "transparent" : msg.isError ? undefined : "var(--border)",
                   color: msg.sender === "user" ? "white" : "var(--ink)"
                 }}
               >
-                <div className="whitespace-pre-line prose prose-sm max-w-none">
-                  {msg.text}
-                </div>
+                <MessageText text={msg.text} />
 
-                {/* Render Grounded Product Cards if present */}
+                {/* Product Cards */}
                 {msg.products && msg.products.length > 0 && (
-                  <div className="mt-5 space-y-3 border-t border-black/10 pt-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                      <Package size={14} /> Retrieved Catalog Products ({msg.products.length}):
+                  <div className="mt-4 space-y-3 border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+                    <p className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "var(--primary)" }}>
+                      <Package size={13} /> Retrieved Products ({msg.products.length})
                     </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {msg.products.map((p) => (
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      {msg.products.map((p, idx) => (
                         <div
-                          key={p.id}
-                          className="rounded-xl p-3.5 border bg-white dark:bg-black/20 flex flex-col justify-between transition-all hover:border-emerald-700/40 shadow-xs"
+                          key={p.id || idx}
+                          className="rounded-xl p-3.5 border bg-white dark:bg-black/20 flex flex-col transition-all hover:border-emerald-700/40"
                           style={{ borderColor: "var(--border)" }}
                         >
-                          <div>
-                            <div className="flex items-start justify-between gap-2 mb-1.5">
-                              <span className="font-semibold text-xs text-[var(--ink)] line-clamp-1">
-                                {p.name}
-                              </span>
-                              <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                {p.category}
-                              </span>
-                            </div>
-                            <p className="text-xs text-[var(--ink-soft)] line-clamp-2 mb-3">
-                              {p.description || `Catalog product in ${p.category}`}
-                            </p>
+                          {/* Name + category */}
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <span className="font-semibold text-xs leading-snug" style={{ color: "var(--ink)" }}>
+                              {p.name}
+                            </span>
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 whitespace-nowrap">
+                              {p.category}
+                            </span>
                           </div>
 
-                          <div className="border-t border-black/5 pt-2 flex items-center justify-between text-xs">
+                          {/* Description */}
+                          {p.description && (
+                            <p className="text-[11px] text-[var(--ink-soft)] line-clamp-2 mb-2.5">
+                              {p.description}
+                            </p>
+                          )}
+
+                          {/* Price / Stock / Popularity row */}
+                          <div className="mt-auto pt-2 border-t border-black/5 grid grid-cols-3 gap-1.5 text-[11px]">
                             <div>
-                              <span className="text-[10px] uppercase font-bold text-[var(--ink-soft)] block">Price</span>
-                              <span className="font-mono-stat font-bold text-emerald-800 dark:text-emerald-400">
+                              <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5">Price</span>
+                              <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">
                                 {formatINR(p.price)}
                               </span>
                             </div>
-                            <div className="text-right">
-                              <span className="text-[10px] uppercase font-bold text-[var(--ink-soft)] block">Stock</span>
+                            <div>
+                              <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5">Stock</span>
                               <span className={`font-semibold ${p.stock > 0 ? "text-emerald-700" : "text-rose-600"}`}>
-                                {p.stock > 0 ? `${p.stock} units` : "Out of stock"}
+                                {p.stock > 0 ? `${p.stock}` : "Out of stock"}
                               </span>
                             </div>
+                            {p.unitsSold > 0 && (
+                              <div>
+                                <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5 flex items-center gap-0.5">
+                                  <TrendingUp size={9} /> Sold
+                                </span>
+                                <span className="font-semibold text-amber-700">
+                                  {p.unitsSold.toLocaleString("en-IN")}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -268,46 +379,54 @@ export default function VendorAssistant() {
                   </div>
                 )}
 
-                {/* Sources Citation Tray */}
+                {/* Sources */}
                 {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-black/5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ink-soft)]">
-                    <span className="font-bold text-[var(--primary)] flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-emerald-700" /> Sources:
+                  <div className="mt-3.5 pt-3 border-t flex flex-wrap items-center gap-1.5 text-[11px]" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+                    <span className="font-bold flex items-center gap-1" style={{ color: "var(--primary)" }}>
+                      <CheckCircle2 size={11} className="text-emerald-700" /> Sources:
                     </span>
                     {msg.sources.map((s, idx) => (
                       <span
                         key={idx}
                         className="px-2 py-0.5 rounded-md bg-black/5 font-mono text-[10px]"
-                        title={`ID: ${s.productId} | ${s.category} | ${formatINR(s.price)}`}
+                        title={`ID: ${s.productId} | ${s.category} | ${formatINR(s.price)} | Stock: ${s.stock}`}
                       >
                         {s.productName || s.productId}
                       </span>
                     ))}
                   </div>
                 )}
+
+                {/* No results note */}
+                {msg.sender === "ai" && !msg.isError && msg.products && msg.products.length === 0 && msg.id !== "welcome" && (
+                  <div className="mt-3 flex items-center gap-1.5 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+                    <Info size={12} />
+                    <span>No products were retrieved for this response.</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
 
-          {/* Loading Thinking Bubble */}
+          {/* Thinking indicator */}
           {loading && (
             <div className="flex flex-col items-start">
-              <div className="flex items-center gap-2 mb-1 text-xs text-[var(--ink-soft)] font-medium">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-white text-[10px] font-bold">
-                  <Bot size={12} />
+              <div className="flex items-center gap-2 mb-1.5 text-xs font-medium" style={{ color: "var(--ink-soft)" }}>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-white">
+                  <Bot size={11} />
                 </span>
                 <span>ShopSense Assistant</span>
               </div>
               <div
-                className="rounded-2xl rounded-tl-none p-4 border shadow-sm flex items-center gap-3 text-sm text-[var(--ink-soft)]"
-                style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                className="rounded-2xl rounded-tl-none px-4 py-3.5 border shadow-sm flex items-center gap-3 text-sm"
+                style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink-soft)" }}
               >
                 <div className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-emerald-700 animate-bounce" style={{ animationDelay: "0ms" }} />
                   <span className="h-2 w-2 rounded-full bg-emerald-700 animate-bounce" style={{ animationDelay: "150ms" }} />
                   <span className="h-2 w-2 rounded-full bg-emerald-700 animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
-                <span>Retrieving catalog vectors & synthesizing grounded response...</span>
+                <span>Searching catalog &amp; generating grounded response…</span>
               </div>
             </div>
           )}
@@ -315,7 +434,7 @@ export default function VendorAssistant() {
           <div ref={chatBottomRef} />
         </div>
 
-        {/* Input Bar */}
+        {/* Input */}
         <div className="p-4 border-t" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
           <form
             onSubmit={(e) => {
@@ -329,24 +448,32 @@ export default function VendorAssistant() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything about products, pricing, stock, categories (e.g., 'What laptop is under 50000?')..."
+              placeholder="Ask about products, prices, stock, categories…"
               disabled={loading}
               className="flex-1 rounded-xl px-4 py-3 text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-700/30 transition-all"
-              style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink)" }}
+              style={{
+                background: "var(--surface)",
+                borderColor: "var(--border)",
+                color: "var(--ink)"
+              }}
+              maxLength={500}
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:opacity-95 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 disabled:opacity-40"
               style={{ background: "var(--primary)" }}
             >
               <Send size={15} />
-              <span>Send</span>
+              <span className="hidden sm:inline">Send</span>
             </button>
           </form>
-          <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--ink-soft)]">
-            <span>Powered by ShopSense Vector Search & RAG</span>
-            <span>{status?.indexedProducts ? `${status.indexedProducts.toLocaleString()} items indexed` : "Catalog connected"}</span>
+          <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: "var(--ink-soft)" }}>
+            <span>Answers grounded in the ShopSense catalog — no hallucinated products.</span>
+            {status?.indexedProducts
+              ? <span>{status.indexedProducts.toLocaleString()} items indexed</span>
+              : <span>Catalog connected</span>
+            }
           </div>
         </div>
       </div>

@@ -59,7 +59,7 @@ const server = app.listen(0, async () => {
     }
   }
 
-  console.log("\n--- Testing Milestone 3 Reporting APIs ---");
+  console.log("\n--- Testing Reporting APIs ---");
   
   await testEndpoint(
     "GET /api/analytics/reporting/sales-over-time (Marketplace 30d)",
@@ -162,7 +162,7 @@ const server = app.listen(0, async () => {
     }
   );
 
-  console.log("\n--- Testing Milestone 3 Benchmarking API ---");
+  console.log("\n--- Testing Benchmarking API ---");
 
   await testEndpoint(
     "GET /api/analytics/benchmark (Vendor 1)",
@@ -193,7 +193,7 @@ const server = app.listen(0, async () => {
     }
   );
 
-  console.log("\n--- Testing Milestone 3 CSV Export APIs ---");
+  console.log("\n--- Testing CSV Export APIs ---");
 
   await testEndpoint(
     "GET /api/analytics/export/sales (CSV headers & content)",

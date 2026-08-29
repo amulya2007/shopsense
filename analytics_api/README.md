@@ -1,6 +1,6 @@
-﻿# ShopSense Analytics API (Milestone 3 - Step 1)
+﻿# ShopSense Analytics API
 
-A FastAPI microservice that provides analytics endpoints for the ShopSense project.
+A FastAPI microservice that provides analytics endpoints for the ShopSense platform.
 Runs alongside the Express server, reads the same SQLite database (read-only),
 and validates the same JWT tokens.
 

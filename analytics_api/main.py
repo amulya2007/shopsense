@@ -1,6 +1,5 @@
 ﻿"""
-ShopSense - Milestone 3, Step 1
-FastAPI Analytics Microservice
+ShopSense — FastAPI Analytics Microservice
 
 Runs alongside the existing Express server (default port 8000).
 Reads the same SQLite database (server/db/shopsense.db) and validates
@@ -142,7 +141,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ShopSense Analytics API",
     description=(
-        "Milestone 3 - Step 1. FastAPI analytics service for ShopSense. "
+        "FastAPI analytics service for ShopSense. "
         "Use the JWT token from POST /api/auth/login (Express) as a Bearer token here."
     ),
     version="1.0.0",

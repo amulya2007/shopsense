@@ -100,17 +100,13 @@ function Metric({ label, value, currency = false, tone = "default" }) {
   );
 }
 
-function Panel({ icon: Icon, stepNumber, eyebrow, title, description, action, children }) {
+function Panel({ icon: Icon, eyebrow, title, description, action, children }) {
   return (
     <section className="insights-section rounded-2xl p-5 sm:p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
           <div className="insights-section-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold" style={{ background: "var(--success-soft)", color: "var(--primary)" }}>
-            {stepNumber ? (
-              <span className="text-sm font-display font-bold">#{stepNumber}</span>
-            ) : (
-              <Icon size={18} />
-            )}
+            <Icon size={18} />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -1249,8 +1245,8 @@ export default function VendorInsights() {
           {/* ========================================================================= */}
           <Panel
             icon={Scale}
-            eyebrow="Vendor Benchmarking"
-            title="Vendor vs Marketplace Benchmarking"
+            eyebrow="Performance Benchmark"
+            title="Vendor vs Marketplace Benchmark"
             description="Real-time performance benchmark comparing your vendor metrics (Revenue, Orders, Units Sold, Products Listed) against the overall marketplace average."
           >
             <VendorBenchmarkPanel benchmark={data.benchmark} />
@@ -1260,9 +1256,8 @@ export default function VendorInsights() {
           {/* 1. INVENTORY HEALTH */}
           {/* ========================================================================= */}
           <Panel
-            stepNumber="1"
             icon={PackageCheck}
-            eyebrow="Section 1"
+            eyebrow="Inventory Intelligence"
             title="Inventory Health & Stock Status"
             description="Live overview of catalog stock levels, replenishment requirements, and supply risks."
             action={
@@ -1287,10 +1282,9 @@ export default function VendorInsights() {
           {/* 2. CUSTOMER INSIGHTS (3 Spending Categories: High, Medium, Low Tier) */}
           {/* ========================================================================= */}
           <Panel
-            stepNumber="2"
             icon={Users}
-            eyebrow="Section 2"
-            title="Customer Insights (3 Spending Tiers)"
+            eyebrow="Customer Insights"
+            title="Customer Segments (3 Spending Tiers)"
             description="5,000 historical customers categorized into 3 distinct spending tiers based on total purchase value."
           >
             {/* 3 Tier Summary Cards */}
@@ -1428,11 +1422,10 @@ export default function VendorInsights() {
           {/* 3. SALES PERFORMANCE (Day, Week, Month - Spacious Graph) */}
           {/* ========================================================================= */}
           <Panel
-            stepNumber="3"
             icon={BarChart3}
-            eyebrow={`Section 3 · ${reportingScope === "vendor" ? "Vendor Live Sales" : "Marketplace Dataset"}`}
-            title="Sales Performance (Day, Week, Month)"
-            description={`Spacious revenue and sales volume trends (${reportingScope === "vendor" ? "Live Vendor Transactions" : "Marketplace Dataset"}) with smooth cubic spline curves and metric toggles.`}
+            eyebrow={`Sales & Reporting · ${reportingScope === "vendor" ? "Vendor Live Sales" : "Marketplace Dataset"}`}
+            title="Sales Performance Over Time"
+            description={`Revenue and sales volume trends (${reportingScope === "vendor" ? "Live Vendor Transactions" : "Marketplace Dataset"}) with smooth spline curves and metric toggles.`}
           >
             <SpaciousSalesChart data={reportingData?.salesOverTime || data.sales} />
           </Panel>
@@ -1441,10 +1434,9 @@ export default function VendorInsights() {
           {/* 4. SALES PERFORMANCE (Top Products by Sales / Units Sold) */}
           {/* ========================================================================= */}
           <Panel
-            stepNumber="4"
             icon={Sparkles}
-            eyebrow={`Section 4 · ${reportingScope === "vendor" ? "Your Top Products" : "Marketplace Bestsellers"}`}
-            title="Sales Performance (Top Products by Sales & Units Sold)"
+            eyebrow={`Product Intelligence · ${reportingScope === "vendor" ? "Your Top Products" : "Marketplace Bestsellers"}`}
+            title="Top Products by Sales Volume & Revenue"
             description={`Bestselling products ranked by sales volume and revenue generation in ${reportingScope === "vendor" ? "your vendor catalog" : "the marketplace dataset"}.`}
           >
             <div className="space-y-4">
@@ -1497,9 +1489,8 @@ export default function VendorInsights() {
           {/* 5. REVENUE BY CATEGORY */}
           {/* ========================================================================= */}
           <Panel
-            stepNumber="5"
             icon={Layers}
-            eyebrow={`Section 5 · ${reportingScope === "vendor" ? "Vendor Category Breakdown" : "Marketplace Category Breakdown"}`}
+            eyebrow={`Performance Benchmark · ${reportingScope === "vendor" ? "Vendor Category Breakdown" : "Marketplace Category Breakdown"}`}
             title="Revenue by Category"
             description={`Revenue distribution and product sales contribution across categories in ${reportingScope === "vendor" ? "your sales history" : "the marketplace dataset"}.`}
           >
@@ -1541,11 +1532,10 @@ export default function VendorInsights() {
           {/* 6. DEMAND PROJECTION & INTERACTIVE STOCKOUT ENGINE */}
           {/* ========================================================================= */}
           <Panel
-            stepNumber="6"
             icon={TrendingUp}
-            eyebrow="Section 6"
-            title="Demand Projection & Interactive Stockout Engine"
-            description="Search across 10,000 dataset products + catalog products to simulate inventory depletion trajectories."
+            eyebrow="Demand Forecast"
+            title="Demand Projection & Stockout Engine"
+            description="Search across 10,000 catalog products to simulate inventory depletion trajectories."
           >
             <div className="mb-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">

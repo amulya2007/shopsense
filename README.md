@@ -1,34 +1,75 @@
-# ShopSense — Vendor Marketplace Console
+# ShopSense — Vendor Marketplace Intelligence Platform
 
-A full-stack vendor marketplace management platform: vendors register and manage their product catalog; admins review applications and manage vendor accounts.
+ShopSense is a full-stack vendor marketplace and business intelligence platform. Vendors register, manage their product catalog, and access a complete suite of analytics, demand forecasting, customer segmentation, and AI-powered shopping assistance — all from a single, unified interface.
 
-Rebuilt with a distinct visual identity (deep teal / amber "ledger" theme, Sora + Inter + IBM Plex Mono typography).
+---
+
+## Overview
+
+ShopSense combines a live vendor catalog management system with deep analytics drawn from a historical dataset of 10,000+ products, 5,000+ customers, and real transaction history. The platform is designed to feel like one cohesive product rather than a collection of individual features.
+
+---
 
 ## Technology Stack
 
-- **Backend:** Node.js, Express, SQLite (via `better-sqlite3`), JWT auth, bcrypt
-- **Frontend:** React 19, Vite, React Router, Tailwind CSS, lucide-react icons
-- **AI & RAG Engine:** In-memory Vector Store with dense semantic embeddings, hybrid cosine similarity retrieval, Google Gemini / OpenAI LLM integration with grounded catalog fallback
+| Layer | Technology |
+|---|---|
+| Backend | Node.js, Express |
+| Database | SQLite via `better-sqlite3` |
+| Authentication | JWT (7-day), bcryptjs, RBAC |
+| Frontend | React 19, Vite, React Router v6, Tailwind CSS |
+| Icons | lucide-react |
+| Analytics data | XLSX dataset import into SQLite on first run |
+| AI / RAG Engine | In-memory vector store, cosine similarity, hybrid retrieval |
+| LLM providers | Google Gemini, OpenAI (optional — graceful local fallback) |
+| Optional microservice | FastAPI analytics microservice (read-only, separate port) |
+
+---
 
 ## Project Structure
 
 ```
-server/              Express API (port 4000)
-  db/                SQLite database + auto-seed on startup
-  services/          RAG service & vector store engine (ragService.js)
-  routes/            auth.js, vendor.js, admin.js, analytics.js, ai.js
-  middleware/        JWT auth guard (auth.js)
-client/              React app (port 5173, proxies /api -> :4000)
-  src/
-    pages/           Login, Register, vendor/*, admin/*
-    components/      Shell (sidebar layout), StatCard, StatusBadge, ProtectedRoute
-    context/         AuthContext (JWT + user session)
-    lib/             axios API client
+shopsense/
+├── server/                   Express API (port 4000)
+│   ├── db/                   SQLite database + auto-seed on startup
+│   │   └── index.js          Schema creation, dataset import, demo seed
+│   ├── middleware/
+│   │   └── auth.js           JWT verification + RBAC guard
+│   ├── routes/
+│   │   ├── auth.js           Login, register, token refresh
+│   │   ├── vendor.js         Catalog CRUD, stock management, dashboard
+│   │   ├── admin.js          Vendor approval, suspension, management
+│   │   ├── analytics.js      Full BI suite: inventory, customers, sales,
+│   │   │                     forecasting, benchmarking, CSV exports
+│   │   └── ai.js             RAG shopping assistant endpoints
+│   └── services/
+│       └── ragService.js     Vector store, hybrid retrieval, LLM integration
+│
+├── client/                   React app (port 5173)
+│   └── src/
+│       ├── pages/
+│       │   ├── vendor/       Dashboard, Catalog, Insights, AI Assistant, Profile
+│       │   └── admin/        Admin dashboard, Vendor management
+│       ├── components/       Shell, StatCard, StatusBadge, ProductImage, etc.
+│       ├── context/          AuthContext (JWT session)
+│       └── lib/              Axios API client, currency formatter
+│
+├── analytics_api/            Optional FastAPI microservice (port 8000)
+│   ├── main.py               Summary, sales-over-time, top-products endpoints
+│   └── README.md
+│
+└── dataset/                  Source XLSX files (imported once into SQLite)
+    ├── products_1.xlsx
+    ├── customers_1.xlsx
+    ├── orders_1.xlsx
+    └── order_items_1.xlsx
 ```
 
-## Getting Started
+---
 
-### 1. Backend Setup
+## Setup
+
+### 1. Backend
 
 ```bash
 cd server
@@ -36,12 +77,21 @@ npm install
 npm run dev
 ```
 
-Starts the API on `http://localhost:4000` and creates `shopsense.db` on first run, seeded with:
+Starts the API on `http://localhost:4000`. On first run, SQLite initialises automatically with:
 
-- **Admin:** `admin@demo.com` / `admin123`
-- **Vendor (approved):** `vendor@demo.com` / `vendor123`
+- Schema creation (vendors, products, sales, analytics tables)
+- Historical dataset import from `/dataset/*.xlsx`
+- RAG vector index built from 10,009 products
+- Demo accounts seeded (see credentials below)
 
-### 2. Frontend Setup
+**Demo credentials:**
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@demo.com | admin123 |
+| Vendor | vendor@demo.com | vendor123 |
+
+### 2. Frontend
 
 ```bash
 cd client
@@ -49,220 +99,378 @@ npm install
 npm run dev
 ```
 
-Starts the app on `http://localhost:5173`. API calls to `/api/*` are proxied to the backend automatically.
+Starts the app on `http://localhost:5173`. API calls to `/api/*` are proxied to the backend automatically via Vite config.
 
-Sign in with either demo account above, or register a new vendor (it will land in "pending" status until an admin approves it from the Admin → Vendor management screen).
+### 3. AI Provider (Optional)
 
----
+Set environment variables in `server/.env` to enable an external LLM. Without these, the system runs in local grounded-fallback mode — all responses are generated directly from retrieved catalog data with no hallucination.
 
-## Core Features
+```env
+# Google Gemini (recommended)
+GEMINI_API_KEY=your_gemini_api_key_here
 
-### Vendor Features
-- **Dashboard:** Sales, revenue, transactions, products-listed statistics, and recent products overview.
-- **My Catalog:** Full CRUD operations for products (list, edit, adjust stock, delete).
-- **Add/Edit Product:** Name, description, category, price, stock, image URL, with autocomplete suggestions drawn from catalog history.
-- **Insights:** Deep BI analytics, demand projection, 3-tier customer segmentation, and market basket association rules.
-- **AI Shopping Assistant:** Interactive RAG-powered shopping advisor for querying catalog products with vector-based semantic retrieval.
-- **Profile:** Edit account info, change password, and view approval status.
+# OR OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
 
-### Admin Features
-- **Dashboard:** Total, pending, approved, and suspended vendor metrics with recent registrations table.
-- **Vendor Management:** Filter by status, approve, suspend, or reset any vendor account.
+# JWT secret (override default dev secret in production)
+JWT_SECRET=your_production_secret_here
+```
 
 ---
 
-## Inventory & Customer Insights
+## Environment Variables
 
-The Vendor sidebar includes **Insights**, importing historical transaction data into SQLite analytics tables alongside live vendor products:
-
-- Live catalog inventory stock statuses and configurable low/medium stock thresholds
-- 3-tier customer segmentation (High, Medium, Low value tiers)
-- Frequent product-pair patterns with absolute and relative support
-- Association rules and cross-selling product recommendations with configurable support/confidence
-- 30-day demand projection based on daily sales trends with category-average fallbacks
-- Dataset import validation comparing database totals with source data files
-
-### Analytics API Endpoints
-
-All endpoints require a valid Vendor or Admin JWT:
-
-- `GET /api/analytics/inventory?lowThreshold=5&mediumThreshold=20`
-- `GET /api/analytics/historical-summary`
-- `GET /api/analytics/customers`
-- `GET /api/analytics/sales`
-- `GET /api/analytics/top-products?category=Electronics&limit=5`
-- `GET /api/analytics/frequent-patterns?minSupport=0.01`
-- `GET /api/analytics/association-rules?minSupport=0.01&minConfidence=0.2`
-- `GET /api/analytics/recommendations?minSupport=0.01&minConfidence=0.2`
-- `GET /api/analytics/forecast?lowThreshold=5&mediumThreshold=20`
-- `GET /api/analytics/validation`
+| Variable | Required | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | Optional | Google Gemini API key for LLM generation |
+| `OPENAI_API_KEY` | Optional | OpenAI API key (used if Gemini not configured) |
+| `LLM_API_KEY` | Optional | Generic fallback LLM key alias |
+| `JWT_SECRET` | Recommended | JWT signing secret (defaults to dev value) |
+| `PORT` | Optional | Backend port (defaults to 4000) |
+| `CLIENT_ORIGIN` | Optional | Additional CORS origin for production deploys |
+| `DB_PATH` | Optional | Path to SQLite DB (used by FastAPI microservice) |
 
 ---
 
-## Advanced Analytics & Reporting
+## Vendor Experience
 
-Production-grade reporting, vendor benchmarking against marketplace aggregates, and direct CSV data exports.
+Vendors access a full business management suite after approval:
 
-### 1. Reporting APIs
+**Dashboard** — Business overview: total sales, revenue, transactions, and products listed. Recent product table with images, categories, prices, and stock.
 
-Frontend-ready BI endpoints with timeframe filtering (`30d`, `90d`, `year`, `month`, `week`) and scope selection (`vendor` live sales or `marketplace` dataset):
+**My Catalog** — Full product CRUD: list, add, edit, delete, adjust stock. Product images via URL or file upload. Low-stock badge indicators.
 
-- `GET /api/analytics/reporting/sales-over-time`
-  - Parameters: `timeframe` (default `30d`), `scope` (`vendor` or `marketplace`)
-  - Returns chronologically ordered sales timeseries with `revenue`, `orders`, `unitsSold`, and `aov`.
-- `GET /api/analytics/reporting/category-performance`
-  - Parameters: `scope` (`vendor` or `marketplace`)
-  - Returns revenue, units sold, order count, product count, and `revenueSharePct` across categories.
-- `GET /api/analytics/reporting/top-products`
-  - Parameters: `limit` (1–100, default 10), `category` (optional filter), `scope` (`vendor` or `marketplace`)
-  - Returns bestselling products ranked by volume and revenue.
-- `GET /api/analytics/reporting/summary`
-  - Parameters: `scope` (`vendor` or `marketplace`)
-  - Returns executive KPIs: `totalRevenue`, `totalOrders`, `totalUnitsSold`, `totalProducts`, `averageOrderValue`, `topCategory`, and `topProduct`.
+**Add / Edit Product** — Name, description, category, price, stock, image. Autocomplete suggestions drawn from catalog history.
 
-### 2. Vendor Benchmarking API
+**Insights** — Complete business intelligence suite (see Analytics & Reporting below).
 
-- `GET /api/analytics/benchmark`
-  - Compares the authenticated vendor against the marketplace average across all approved vendors for:
-    - **Total Revenue** (₹)
-    - **Total Orders**
-    - **Units Sold**
-    - **Products Listed**
-  - Computes exact percentage differences (`+X.X%` above or `-X.X%` below marketplace average).
-  - Provides categorized overall performance rating and strategic insights.
-  - Enforces strict vendor isolation (vendors only see their own metrics and anonymized marketplace averages).
+**AI Shopping Assistant** — RAG-powered catalog search and product discovery (see AI Shopping Assistant below).
 
-### 3. CSV Export APIs
-
-- `GET /api/analytics/export/sales`
-  - Exports real sales records as a downloadable CSV.
-  - Columns: `Date,Product,Category,Quantity,Price,Revenue,Vendor`.
-  - Sets `Content-Type: text/csv; charset=utf-8` and `Content-Disposition: attachment; filename="sales_report.csv"`.
-- `GET /api/analytics/export/products`
-  - Exports product catalog performance metrics as a downloadable CSV.
-  - Columns: `ProductID,Name,Category,Price,Stock,UnitsSold,Revenue,Vendor`.
-  - Sets `Content-Disposition: attachment; filename="products_report.csv"`.
+**Profile** — Edit account information, change password, view approval status.
 
 ---
 
-## RAG-Powered AI Shopping Assistant
+## Admin Experience
 
-ShopSense features a **Retrieval-Augmented Generation (RAG)** AI Shopping Assistant that enables users to query the product catalog using natural language.
+**Admin Dashboard** — Total, pending, approved, and suspended vendor counts with recent registration table.
+
+**Vendor Management** — Filter by status, approve, suspend, or reactivate any vendor account.
+
+---
+
+## Analytics & Reporting
+
+All analytics are computed from real SQLite data. No mock or placeholder values.
+
+### Business Overview
+
+High-level KPIs from the historical dataset: total orders, total revenue, products sold, customer count, average order value.
+
+### Sales & Reporting
+
+Sales and revenue timeseries with day / week / month timeframe controls. Supports two scopes:
+
+- **Vendor** — Live sales transactions from the vendor's own catalog
+- **Marketplace** — Historical dataset (10,000+ products, 5,000+ orders)
+
+Interactive SVG spline chart with Revenue, Units Sold, Orders, and Average Order Value metric toggles. Hover tooltips showing exact values per data point.
+
+### Performance Benchmark
+
+Compares the authenticated vendor against the marketplace average across all approved vendors:
+
+| Metric | Vendor Value | Marketplace Average | Difference |
+|---|---|---|---|
+| Total Revenue | ₹X,XXX | ₹X,XXX | +/-X.X% |
+| Total Orders | X | X | +/-X.X% |
+| Units Sold | X | X | +/-X.X% |
+| Products Listed | X | X | +/-X.X% |
+
+Each metric shows above/below/equal status with a relative performance bar. Strategic insights are generated based on actual comparisons.
+
+### Inventory Intelligence
+
+Live stock status for every catalog product with configurable low-stock and medium-stock thresholds. Summary counts: healthy, low-stock, out-of-stock.
+
+### Customer Insights
+
+5,000 historical customers segmented into three spending tiers based on total purchase value:
+
+- **High Value (VIP)** — Top spending customers, total revenue share, average spend
+- **Medium Value** — Mid-tier customers
+- **Low Value** — Entry-level customers
+
+Searchable customer table with tier filter.
+
+### Product Intelligence
+
+Bestselling products ranked by units sold and revenue. Supports vendor scope (live sales) and marketplace scope (historical dataset). Category filter and configurable result limit.
+
+### Demand Forecast
+
+Interactive stock depletion simulation for any product in the 10,000-item catalog:
+
+- Daily sales velocity from historical order data
+- Projected demand over 7 / 14 / 30 / 60 / 90-day horizons
+- Stock runout date calculation
+- Recommended reorder quantity
+- SVG trajectory chart: stock depletion vs cumulative demand
+- Category-average velocity fallback when product-specific history is insufficient
+
+### Cross-Sell Intelligence
+
+Market basket analysis from actual transaction data:
+
+- **Frequently Bought Together** — Product and category pair co-purchase patterns with support metrics
+- **Association Rules** — Directional purchase relationships (If X → Then Y) with support and confidence
+- **Cross-Sell Recommendations** — Rule-based suggestions generated from co-purchase evidence
+
+Configurable minimum support and confidence thresholds.
+
+### Dataset Validation
+
+Live audit comparing imported SQLite table row counts against source XLSX workbook totals. Displays passed/failed status per dataset.
+
+---
+
+## CSV Export
+
+| Export | Endpoint | Columns |
+|---|---|---|
+| Sales Report | `GET /api/analytics/export/sales` | Date, Product, Category, Quantity, Price, Revenue, Vendor |
+| Products Report | `GET /api/analytics/export/products` | ProductID, Name, Category, Price, Stock, UnitsSold, Revenue, Vendor |
+
+Both endpoints support `?scope=vendor` (live vendor sales) or `?scope=marketplace` (full historical dataset). Files are streamed with correct `Content-Type: text/csv` and `Content-Disposition` headers.
+
+---
+
+## AI Shopping Assistant
+
+ShopSense includes a Retrieval-Augmented Generation (RAG) AI Shopping Assistant that answers natural-language product queries using real catalog data, with strict grounding and no hallucination.
 
 ### RAG Architecture
 
 ```
 User Question
-    │
-    ▼
-[1. Intent & Constraint Extraction] (Budget, Category, In-Stock)
-    │
-    ▼
-[2. Vector Embedding & Cosine Similarity Search] (10,000+ SQLite Products)
-    │
-    ▼
-[3. Catalog Context Grounding & Anti-Hallucination Guardrails]
-    │
-    ▼
-[4. LLM Synthesis] (Google Gemini / OpenAI / Local Grounded Synthesizer)
-    │
-    ▼
-Answer + Grounded Product Cards + Transparent Source Citations
+      │
+      ▼
+[1] Intent & Constraint Extraction
+    • Price: under / above / between / range
+    • Category: Electronics, Audio, Computers, Accessories, Wearables, Fashion, Beauty, Home & Kitchen
+    • Stock: in-stock / out-of-stock
+    • Ordering: cheapest / most expensive / popular
+    • Follow-up context: last 2 conversation turns
+      │
+      ▼
+[2] Vector Similarity Search
+    • 128-dim dense semantic vectors (character n-gram + token hashing)
+    • Category-boosted embeddings
+    • Cosine similarity against 10,009 indexed products
+    • Token overlap boost for exact name/category matches
+      │
+      ▼
+[3] Hard Constraint Filtering
+    • Price ceiling: disqualify products above maxPrice
+    • Price floor: disqualify products below minPrice
+    • In-stock: disqualify stock ≤ 0
+    • Out-of-stock: disqualify stock > 0
+    • If zero valid results: surfaces nearest alternatives with honest explanation
+      │
+      ▼
+[4] Popularity & Price Ranking
+    • Popular queries: sort by real unitsSold from analytics_order_items
+    • Cheapest: narrow to category (if specified), then sort price ascending
+    • Most expensive: sort price descending
+    • Standard: cosine similarity + token overlap score
+      │
+      ▼
+[5] Context Construction
+    • Top 6 products passed to LLM
+    • Each product includes: ID, name, category, price, stock, vendor, description, unitsSold
+    • Constraint-missed flag triggers honest limitation message
+      │
+      ▼
+[6] LLM Generation (Gemini → OpenAI → Local Fallback)
+    • Strict grounding rules: only reference retrieved products
+    • Never invent prices, specs, ratings, reviews, or popularity claims
+    • Spec queries (best for video editing / gaming) trigger honest limitation note
+    • 100% offline local fallback generates factual responses without any LLM
+      │
+      ▼
+Answer + Grounded Product Cards + Source Citations
 ```
 
-### Key Components
+### Knowledge Source
 
-1. **Knowledge Source:** Real SQLite product data from both `products` (live vendor items) and `analytics_products` (historical catalog, 10,000+ items).
-2. **Vector Store:** High-performance local in-memory vector store indexing product documents with 128-dimensional dense semantic vectors and n-gram subword hashing.
-3. **Hybrid Search:** Combines vector cosine similarity with exact keyword overlap and constraint filtering (e.g. price ceiling, in-stock verification, category matching).
-4. **Anti-Hallucination Guardrails:** The LLM is strictly constrained to the retrieved context. It never hallucinates unlisted products, fake prices, or non-existent stock.
-5. **Real-time Index Refresh:** Automatically updates the vector index whenever products are added, updated, stock-adjusted, or deleted in the vendor catalog.
+| Source | Table | Products |
+|---|---|---|
+| Live vendor catalog | `products` | Variable (active vendor listings) |
+| Historical dataset | `analytics_products` | 10,000+ |
+| Popularity data | `analytics_order_items` | 6,302 products with sales history |
 
-### Environment Configuration
+### Catalog Data Limitations
 
-The AI Assistant supports optional external LLM providers via environment variables in `server/.env`:
+The ShopSense dataset has the following characteristics that the assistant communicates honestly:
 
-```env
-# Optional: Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
+- **Price range:** ₹99 to ₹9,999 (no products above ₹10,000)
+- **Categories:** Accessories, Audio, Computers, Electronics, Wearables
+- **No technical specs:** CPU, RAM, GPU, battery life, display size are not in the dataset
+- **Popularity:** Available for 6,302 of 10,009 products via historical order data
 
-# Optional: OpenAI API Key (alternative)
-OPENAI_API_KEY=your_openai_api_key_here
+When a query cannot be answered from available data (e.g., "best laptop for video editing" — no specs in dataset), the assistant explains the limitation and shows the most relevant available products.
 
-# Optional: Generic LLM Key
-LLM_API_KEY=your_key_here
+### Vector Store
+
+- Local in-memory store — no external vector database required
+- 128-dimensional dense semantic vectors per product
+- Character 3-gram subword hashing for fuzzy matching
+- Category signal boosting (2× weight)
+- Rebuilt automatically when any product is added, updated, or deleted via vendor catalog
+
+### Index Refresh
+
+The vector index rebuilds automatically on every:
+
+- Product creation (`POST /api/vendor/products`)
+- Product update (`PUT /api/vendor/products/:id`)
+- Stock set (`PATCH /api/vendor/products/:id/stock`)
+- Stock adjustment (`POST /api/vendor/products/:id/stock-adjustments`)
+- Product deletion (`DELETE /api/vendor/products/:id`)
+
+Manual refresh is also available: `POST /api/ai/refresh-index`
+
+### Conversation Context
+
+The assistant supports lightweight follow-up queries. The frontend sends the last 2 AI response product lists as context. This allows questions like "Which is the cheapest?" to resolve correctly after "Show me laptops."
+
+---
+
+## API Reference
+
+### Authentication
+
+```
+POST /api/auth/login
+POST /api/auth/register
 ```
 
-> **Safe Fallback:** If no API key is set, the system operates seamlessly in standalone local RAG mode, generating grounded, factual product syntheses directly from retrieved vector store records without crashing.
+All `/api/vendor/*` and `/api/analytics/*` endpoints require `Authorization: Bearer <token>`.
 
-### AI Assistant API Endpoints
+### Vendor Catalog
 
-- `POST /api/ai/shopping-assistant`
-  - Request: `{ "question": "What is the best laptop for video editing under 50000?" }`
-  - Response:
-    ```json
-    {
-      "answer": "Based on the ShopSense catalog, here are the top options...",
-      "products": [
-        {
-          "id": "P1001",
-          "name": "ProBook Laptop 15",
-          "category": "Computers",
-          "price": 45999,
-          "stock": 18,
-          "vendor": "Verified Vendor",
-          "description": "High performance laptop with dedicated graphics."
-        }
-      ],
-      "sources": [
-        {
-          "productId": "P1001",
-          "productName": "ProBook Laptop 15",
-          "category": "Computers",
-          "price": 45999
-        }
-      ]
-    }
-    ```
-- `GET /api/ai/status`
-  - Returns vector store status, total indexed product count, and active LLM provider.
-- `POST /api/ai/refresh-index`
-  - Manually triggers a complete rebuild of the vector index from the SQLite database.
+```
+GET    /api/vendor/dashboard
+GET    /api/vendor/products
+POST   /api/vendor/products
+PUT    /api/vendor/products/:id
+DELETE /api/vendor/products/:id
+PATCH  /api/vendor/products/:id/stock
+POST   /api/vendor/products/:id/stock-adjustments
+POST   /api/vendor/images
+```
 
-### Frontend Chat Interface
+### Analytics
 
-Accessible via **AI Assistant** (`/vendor/assistant`) in the vendor sidebar:
-- Real-time conversation stream with responsive message bubbles.
-- Interactive quick-start query pills (e.g., *"Show electronics under ₹50,000"*, *"Which products are currently in stock?"*).
-- Formatted Product Cards embedded directly in AI responses showing verified prices in ₹, stock counts, categories, and descriptions.
-- Transparent source tags showing the exact catalog products used for grounding.
+```
+GET /api/analytics/inventory
+GET /api/analytics/customers
+GET /api/analytics/sales
+GET /api/analytics/historical-summary
+GET /api/analytics/frequent-patterns
+GET /api/analytics/association-rules
+GET /api/analytics/recommendations
+GET /api/analytics/forecast
+GET /api/analytics/validation
+GET /api/analytics/reporting/sales-over-time   ?timeframe=30d|90d|year|month|week &scope=vendor|marketplace
+GET /api/analytics/reporting/category-performance ?scope=vendor|marketplace
+GET /api/analytics/reporting/top-products      ?limit=1-100 &category= &scope=vendor|marketplace
+GET /api/analytics/reporting/summary           ?scope=vendor|marketplace
+GET /api/analytics/benchmark
+GET /api/analytics/export/sales                ?scope=vendor|marketplace
+GET /api/analytics/export/products             ?scope=vendor|marketplace
+```
+
+### AI Shopping Assistant
+
+```
+POST /api/ai/shopping-assistant
+     Body: { "question": string, "conversationHistory": optional array }
+     Response: { "answer": string, "products": array, "sources": array }
+
+GET  /api/ai/status
+     Response: { "status", "vectorStoreReady", "indexedProducts", "llmProviderConfigured", "provider" }
+
+POST /api/ai/refresh-index
+     Response: { "success", "message", "indexedProducts" }
+```
+
+### Admin
+
+```
+GET   /api/admin/vendors
+PATCH /api/admin/vendors/:id/status
+```
 
 ---
 
 ## Authentication & Security
 
-- Passwords hashed with `bcryptjs`.
-- Stateless JWT authentication (7-day validity) with role-based access control (`vendor`, `admin`).
-- Strict vendor data isolation: vendors can only access and modify their own catalog and private sales data.
-- Input validation on all endpoints preventing negative stock, divisions by zero, and malformed requests.
+- Passwords hashed with bcryptjs (10 rounds)
+- Stateless JWT authentication with 7-day validity
+- Role-based access control: `vendor` and `admin` roles enforced at middleware level
+- Strict vendor data isolation: vendors can only read and modify their own catalog and sales data
+- AI API keys stored in environment variables only — never in frontend code or committed to source control
+- Input validation on all endpoints: negative stock, malformed prices, oversized requests all rejected
 
 ---
 
-## Testing & Verification
+## Testing
 
-1. **Automated RAG & API Test Suite (`node server/test_rag.js`):**
-   - Vector Store initialization and index verification (10,009 products) ➔ **PASSED**
-   - Category-specific shopping queries ➔ **PASSED**
-   - Budget-constrained queries (`under 50000`) ➔ **PASSED**
-   - In-stock constraint validation (`stock > 0`) ➔ **PASSED**
-   - Price ranking queries (cheapest / highest) ➔ **PASSED**
-   - Bad request / empty query validation (400) ➔ **PASSED**
-   - Existing reporting, benchmarking, CSV export, and analytics verification ➔ **PASSED**
-   - Total: **21 passed, 0 failed**.
+Run the included test suites against the live server:
 
-2. **Frontend Production Build (`npm run build`):**
-   - Verified clean bundle generation with 0 errors.
+```bash
+# From server/
+node test_rag.js    # 21 tests: RAG, vector store, constraint validation, analytics
+node test_m3.js     # 15 tests: Reporting APIs, benchmarking, CSV exports, auth security
+```
+
+**Last verified results:**
+
+| Suite | Tests | Result |
+|---|---|---|
+| test_rag.js | 21 | 21 passed, 0 failed |
+| test_m3.js | 15 | 15 passed, 0 failed |
+| Total | 36 | 36 passed, 0 failed |
+
+**Constraint tests verified:**
+
+| Query | Constraint | Result |
+|---|---|---|
+| "Electronics in stock" | category=Electronics, stock>0 | All results in Electronics, all in stock |
+| "Under 50,000" | price ≤ 50,000 | All results ≤ ₹9,999 (entire catalog qualifies) |
+| "Between 10,000 and 30,000" | price 10k–30k | Honest: no catalog products in that range |
+| "Out of stock" | stock = 0 | All results have stock = 0 |
+| "Cheapest Audio" | category=Audio, cheapest | All results in Audio, sorted by price ascending |
+| "Popular products" | isPopular | Sorted by real unitsSold from order history |
 
 ---
 
-# All Rights Reserved to AMULYA MUNUGOTI
+## Optional FastAPI Microservice
+
+A standalone FastAPI analytics microservice is included for environments that need a Python-native REST layer. It reads the same SQLite database in read-only mode and validates the same JWT tokens.
+
+```bash
+cd analytics_api
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+Endpoints: `GET /analytics/summary`, `GET /analytics/sales-over-time`, `GET /analytics/top-products`
+
+Interactive docs at `http://localhost:8000/docs`.
+
+> The main ShopSense frontend does not depend on this microservice. It is an optional supplementary API.
+
+---
+
+## All Rights Reserved to AMULYA MUNUGOTI
