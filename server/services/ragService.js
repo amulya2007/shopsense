@@ -353,14 +353,21 @@ STRICT GROUNDING RULES:
 
 // Fallback Grounded Response Generator (Ensures 100% offline functionality without hallucinating)
 function formatGroundedFallbackResponse(question, products, constraints) {
+  const isGreeting = /^(hello|hi|hey|greetings|good\s+(morning|afternoon|evening)|howdy|help|who\s+are\s+you|what\s+can\s+you\s+do)\b/i.test(question.trim());
+
   if (!products || products.length === 0) {
+    if (isGreeting) {
+      return `Hello! I'm your **ShopSense AI Shopping Assistant**. I can help you discover products, compare prices, check stock availability, and find recommendations across our catalog. What are you looking for today?`;
+    }
     return `Based on the ShopSense product catalog, no products were found matching your query "${question}". Please try searching for a different category or adjusting your price filter.`;
   }
 
   const count = products.length;
   let intro = `Based on the ShopSense catalog, here are the top **${count} product recommendations** matching your inquiry:\n\n`;
 
-  if (constraints.maxPrice !== null) {
+  if (isGreeting) {
+    intro = `Hello! I'm your **ShopSense AI Shopping Assistant**. How can I help you with your shopping today?\n\nHere are some featured products available in our live catalog:\n\n`;
+  } else if (constraints.maxPrice !== null) {
     intro = `Based on the ShopSense catalog, here are the best options available **under ₹${constraints.maxPrice.toLocaleString("en-IN")}**:\n\n`;
   } else if (constraints.targetCategory) {
     intro = `Based on the ShopSense catalog, here are top recommendations in the **${products[0]?.category}** category:\n\n`;
