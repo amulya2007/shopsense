@@ -8,6 +8,7 @@ const authRoutes = require("./routes/auth");
 const vendorRoutes = require("./routes/vendor");
 const adminRoutes = require("./routes/admin");
 const analyticsRoutes = require("./routes/analytics");
+const aiRoutes = require("./routes/ai");
 
 const app = express();
 const allowedOrigins = [
@@ -37,6 +38,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/vendor", vendorRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

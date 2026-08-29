@@ -184,7 +184,7 @@ function getSmoothSplinePath(points) {
   return path;
 }
 
-// Milestone 3: Vendor vs Marketplace Benchmark Component
+// Vendor vs Marketplace Benchmark Component
 function VendorBenchmarkPanel({ benchmark }) {
   if (!benchmark || !benchmark.benchmarks) {
     return <Empty message="Benchmarking metrics are currently calculating..." />;
@@ -881,7 +881,7 @@ export default function VendorInsights() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState(getSettings);
 
-  // Milestone 3 Reporting & Benchmarking States
+  // Reporting & Benchmarking States
   const [benchmarkData, setBenchmarkData] = useState(null);
   const [reportingScope, setReportingScope] = useState("vendor"); // "vendor" | "marketplace"
   const [reportingTimeframe, setReportingTimeframe] = useState("30d"); // "30d" | "90d" | "year" | "month" | "week"
@@ -1190,7 +1190,7 @@ export default function VendorInsights() {
           </div>
 
           {/* ========================================================================= */}
-          {/* MILESTONE 3: CSV EXPORT & REPORTING SCOPE TOOLBAR */}
+          {/* CSV EXPORT & REPORTING SCOPE TOOLBAR */}
           {/* ========================================================================= */}
           <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
             <div className="flex flex-wrap items-center gap-3">
@@ -1245,11 +1245,11 @@ export default function VendorInsights() {
           </div>
 
           {/* ========================================================================= */}
-          {/* MILESTONE 3: VENDOR BENCHMARKING (Vendor vs Marketplace Average) */}
+          {/* ADVANCED REPORTING: VENDOR BENCHMARKING (Vendor vs Marketplace Average) */}
           {/* ========================================================================= */}
           <Panel
             icon={Scale}
-            eyebrow="Milestone 3 Benchmarking"
+            eyebrow="Vendor Benchmarking"
             title="Vendor vs Marketplace Benchmarking"
             description="Real-time performance benchmark comparing your vendor metrics (Revenue, Orders, Units Sold, Products Listed) against the overall marketplace average."
           >

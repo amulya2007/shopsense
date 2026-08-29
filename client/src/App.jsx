@@ -10,6 +10,7 @@ const VendorDashboard = lazy(() => import("./pages/vendor/VendorDashboard"));
 const VendorCatalog = lazy(() => import("./pages/vendor/VendorCatalog"));
 const VendorProductForm = lazy(() => import("./pages/vendor/VendorProductForm"));
 const VendorInsights = lazy(() => import("./pages/vendor/VendorInsights"));
+const VendorAssistant = lazy(() => import("./pages/vendor/VendorAssistant"));
 const VendorProfile = lazy(() => import("./pages/vendor/VendorProfile"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="add-product" element={<VendorProductForm />} />
             <Route path="edit-product/:id" element={<VendorProductForm />} />
             <Route path="insights" element={<VendorInsights />} />
+            <Route path="assistant" element={<VendorAssistant />} />
             <Route path="profile" element={<VendorProfile />} />
           </Route>
 

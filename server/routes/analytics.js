@@ -753,7 +753,7 @@ router.get("/similar-products", (req, res) => {
 });
 
 // =========================================================================
-// MILESTONE 3: REPORTING APIS, BENCHMARKING & CSV EXPORT
+// ADVANCED REPORTING APIS, BENCHMARKING & CSV EXPORT
 // =========================================================================
 
 function escapeCsvField(val) {
