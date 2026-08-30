@@ -696,10 +696,8 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
 
 // 6. Interactive Demand Forecast Component
 function InteractiveDemandForecast({ item, forecastDays, setForecastDays }) {
-  if (!item) return <Empty message="No product selected for demand forecasting." />;
-
-  const stock = Number(item.stock) || 0;
-  const dailyAverage = Number(item.averageDailySales) || 0;
+  const stock = Number(item?.stock) || 0;
+  const dailyAverage = Number(item?.averageDailySales) || 0;
   const demand = Math.max(1, Math.round(dailyAverage * forecastDays));
   const shortage = Math.max(0, demand - stock);
   const recommendedRestock = shortage;
@@ -717,6 +715,8 @@ function InteractiveDemandForecast({ item, forecastDays, setForecastDays }) {
     }
     return points;
   }, [stock, dailyAverage, forecastDays]);
+
+  if (!item) return <Empty message="No product selected for demand forecasting." />;
 
   const maxVal = Math.max(stock, demand, 1);
   const tWidth = 600;
@@ -921,8 +921,11 @@ export default function VendorInsights() {
 
   // Basket View State
   const [basketView, setBasketView] = useState("products");
+  const loadRequestRef = useRef(0);
+  const reportingRequestRef = useRef(0);
 
   const loadData = async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -933,55 +936,19 @@ export default function VendorInsights() {
         category: forecastCategory,
         search: forecastSearch
       };
-      const [
-        inventory,
-        customers,
-        sales,
-        historical,
-        patterns,
-        rules,
-        recommendations,
-        benchmarkRes,
-        repSalesRes,
-        repCatRes,
-        repTopRes,
-        repSumRes
-      ] = await Promise.all([
+      // Render the live inventory first. Basket mining and forecasts can take
+      // substantially longer on the historical dataset, so they must not hold
+      // the whole Insights page behind a loading screen.
+      const [inventory, customers, sales, historical, benchmarkRes] = await Promise.all([
         api.get("/analytics/inventory", { params }),
         api.get("/analytics/customers"),
         api.get("/analytics/sales"),
         api.get("/analytics/historical-summary"),
-        api.get("/analytics/frequent-patterns", { params }),
-        api.get("/analytics/association-rules", { params }),
-        api.get("/analytics/recommendations", { params }),
-        api.get("/analytics/benchmark"),
-        api.get(`/analytics/reporting/sales-over-time?timeframe=${reportingTimeframe}&scope=${reportingScope}`),
-        api.get(`/analytics/reporting/category-performance?scope=${reportingScope}`),
-        api.get(`/analytics/reporting/top-products?limit=10&scope=${reportingScope}`),
-        api.get(`/analytics/reporting/summary?scope=${reportingScope}`)
+        api.get("/analytics/benchmark")
       ]);
-
-      const optional = await Promise.allSettled([
-        api.get("/analytics/forecast", { params }),
-        api.get("/analytics/validation")
-      ]);
-      const [forecastResult, validationResult] = optional;
-      const forecast = forecastResult.status === "fulfilled" ? forecastResult.value.data : null;
-      const validation = validationResult.status === "fulfilled" ? validationResult.value.data : null;
-
-      if (forecastResult.status === "rejected") {
-        setError(forecastResult.reason?.response?.data?.error || "Forecast service is temporarily unavailable.");
-      }
+      if (requestId !== loadRequestRef.current) return;
 
       setBenchmarkData(benchmarkRes.data || null);
-      setReportingData({
-        salesOverTime: repSalesRes.data || {},
-        categoryPerformance: repCatRes.data || {},
-        topProducts: repTopRes.data || {},
-        summary: repSumRes.data || {}
-      });
-
-      const forecasts = rows(forecast?.forecasts);
       setData({
         inventory: { ...inventory.data, summary: inventory.data?.summary || {} },
         customers: {
@@ -992,41 +959,53 @@ export default function VendorInsights() {
         sales: sales.data || {},
         historical: historical.data || {},
         benchmark: benchmarkRes.data || {},
-        reporting: {
-          salesOverTime: repSalesRes.data || {},
-          categoryPerformance: repCatRes.data || {},
-          topProducts: repTopRes.data || {},
-          summary: repSumRes.data || {}
-        },
-        patterns: {
-          ...patterns.data,
-          patterns: rows(patterns.data?.patterns),
-          categoryPatterns: rows(patterns.data?.categoryPatterns)
-        },
-        rules: {
-          ...rules.data,
-          rules: rows(rules.data?.rules),
-          categoryRules: rows(rules.data?.categoryRules)
-        },
-        recommendations: {
-          ...recommendations.data,
-          recommendations: rows(recommendations.data?.recommendations),
-          topSelling: rows(recommendations.data?.topSelling),
-          categoryAffinity: rows(recommendations.data?.categoryAffinity)
-        },
-        forecastInfo: forecast || {},
-        forecasts,
-        categories: forecast?.categories || ["Accessories", "Audio", "Computers", "Electronics", "Wearables"],
-        validation: rows(validation?.checks)
+        reporting: {},
+        patterns: { patterns: [], categoryPatterns: [] },
+        rules: { rules: [], categoryRules: [] },
+        recommendations: { recommendations: [], topSelling: [], categoryAffinity: [] },
+        forecastInfo: {}, forecasts: [],
+        categories: ["Accessories", "Audio", "Computers", "Electronics", "Wearables"], validation: []
       });
-
-      if (!selectedProduct && forecasts[0]) {
-        setSelectedProduct(String(forecasts[0].product_id));
-      }
       setLoading(false);
+
+      const deferred = await Promise.allSettled([
+        api.get("/analytics/frequent-patterns", { params }), api.get("/analytics/association-rules", { params }),
+        api.get("/analytics/recommendations", { params }), api.get("/analytics/forecast", { params }), api.get("/analytics/validation")
+      ]);
+      if (requestId !== loadRequestRef.current) return;
+      const [patternsResult, rulesResult, recommendationsResult, forecastResult, validationResult] = deferred;
+      const forecast = forecastResult.status === "fulfilled" ? forecastResult.value.data : null;
+      const forecasts = rows(forecast?.forecasts);
+      setData((current) => ({ ...current,
+        patterns: patternsResult.status === "fulfilled" ? { ...patternsResult.value.data, patterns: rows(patternsResult.value.data?.patterns), categoryPatterns: rows(patternsResult.value.data?.categoryPatterns) } : current.patterns,
+        rules: rulesResult.status === "fulfilled" ? { ...rulesResult.value.data, rules: rows(rulesResult.value.data?.rules), categoryRules: rows(rulesResult.value.data?.categoryRules) } : current.rules,
+        recommendations: recommendationsResult.status === "fulfilled" ? { ...recommendationsResult.value.data, recommendations: rows(recommendationsResult.value.data?.recommendations), topSelling: rows(recommendationsResult.value.data?.topSelling), categoryAffinity: rows(recommendationsResult.value.data?.categoryAffinity) } : current.recommendations,
+        forecastInfo: forecast || {}, forecasts, categories: forecast?.categories || current.categories,
+        validation: validationResult.status === "fulfilled" ? rows(validationResult.value.data?.checks) : current.validation
+      }));
+      if (!selectedProduct && forecasts[0]) setSelectedProduct(String(forecasts[0].product_id));
     } catch (requestError) {
+      if (requestId !== loadRequestRef.current) return;
       setError(requestError.response?.data?.error || "Unable to load insights.");
       setLoading(false);
+    }
+  };
+
+  const loadReportingData = async () => {
+    const requestId = ++reportingRequestRef.current;
+    try {
+      const [salesOverTime, categoryPerformance, topProducts, summary] = await Promise.all([
+        api.get(`/analytics/reporting/sales-over-time?timeframe=${reportingTimeframe}&scope=${reportingScope}`),
+        api.get(`/analytics/reporting/category-performance?scope=${reportingScope}`),
+        api.get(`/analytics/reporting/top-products?limit=10&scope=${reportingScope}`),
+        api.get(`/analytics/reporting/summary?scope=${reportingScope}`)
+      ]);
+      if (requestId !== reportingRequestRef.current) return;
+      const reporting = { salesOverTime: salesOverTime.data || {}, categoryPerformance: categoryPerformance.data || {}, topProducts: topProducts.data || {}, summary: summary.data || {} };
+      setReportingData(reporting);
+      setData((current) => current ? { ...current, reporting } : current);
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || "Unable to load reporting data.");
     }
   };
 
@@ -1073,7 +1052,11 @@ export default function VendorInsights() {
 
   useEffect(() => {
     loadData();
-  }, [forecastScope, forecastCategory, forecastDays, reportingScope, reportingTimeframe]);
+  }, [forecastScope, forecastCategory, forecastDays]);
+
+  useEffect(() => {
+    loadReportingData();
+  }, [reportingScope, reportingTimeframe]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(settings));
@@ -1447,7 +1430,7 @@ export default function VendorInsights() {
             icon={BarChart3}
             eyebrow={`Sales & Reporting · ${reportingScope === "vendor" ? "Vendor Live Sales" : "Marketplace Dataset"}`}
             title="Sales Performance Over Time"
-            description={`Revenue and unit volume grouped by the selected calendar period (${reportingScope === "vendor" ? "your sales" : "marketplace orders"}). Day uses each calendar day, Week uses Monday–Sunday weeks, Month uses calendar months. Empty periods show as zero.`}
+            description={`Revenue and unit volume grouped by the selected calendar period (${reportingScope === "vendor" ? "your sales" : "marketplace orders"}). Day shows the latest recorded sales days, Week uses Monday–Sunday calendar weeks, and Month uses calendar months.`}
           >
             <SpaciousSalesChart 
               data={reportingData?.salesOverTime || data.sales} 

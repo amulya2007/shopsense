@@ -789,34 +789,33 @@ router.get("/reporting/sales-over-time", (req, res) => {
         `;
       } else if (timeframe === "week") {
         salesQuery = `
-          SELECT CASE strftime('%w', sold_at)
-                   WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday'
-                   WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday'
-                   ELSE 'Saturday' END AS label,
-                 strftime('%w', sold_at) AS date,
+          SELECT date(sold_at, '-' || ((CAST(strftime('%w', sold_at) AS INTEGER) + 6) % 7) || ' days') AS date,
+                 date(sold_at, '-' || ((CAST(strftime('%w', sold_at) AS INTEGER) + 6) % 7) || ' days') AS label,
                  COALESCE(SUM(amount), 0) AS revenue,
                  COUNT(id) AS orders,
                  COALESCE(SUM(quantity), 0) AS unitsSold,
                  ROUND(COALESCE(AVG(amount), 0), 2) AS aov
           FROM sales
           WHERE vendor_id = ?
-          GROUP BY strftime('%w', sold_at)
-          ORDER BY CAST(strftime('%w', sold_at) AS INTEGER) ASC
+          GROUP BY date(sold_at, '-' || ((CAST(strftime('%w', sold_at) AS INTEGER) + 6) % 7) || ' days')
+          ORDER BY date ASC
         `;
       } else {
         const dayLimit = timeframe === "90d" ? 90 : timeframe === "year" ? 365 : 30;
         salesQuery = `
-          SELECT date(sold_at) AS date,
-                 strftime('%m-%d', sold_at) AS label,
-                 COALESCE(SUM(amount), 0) AS revenue,
-                 COUNT(id) AS orders,
-                 COALESCE(SUM(quantity), 0) AS unitsSold,
-                 ROUND(COALESCE(AVG(amount), 0), 2) AS aov
-          FROM sales
-          WHERE vendor_id = ?
-          GROUP BY date(sold_at)
-          ORDER BY date(sold_at) ASC
-          LIMIT ${dayLimit}
+          SELECT * FROM (
+            SELECT date(sold_at) AS date,
+                   strftime('%m-%d', sold_at) AS label,
+                   COALESCE(SUM(amount), 0) AS revenue,
+                   COUNT(id) AS orders,
+                   COALESCE(SUM(quantity), 0) AS unitsSold,
+                   ROUND(COALESCE(AVG(amount), 0), 2) AS aov
+            FROM sales
+            WHERE vendor_id = ?
+            GROUP BY date(sold_at)
+            ORDER BY date(sold_at) DESC
+            LIMIT ${dayLimit}
+          ) ORDER BY date ASC
         `;
       }
 
@@ -867,19 +866,16 @@ router.get("/reporting/sales-over-time", (req, res) => {
       `).all();
     } else if (timeframe === "week") {
       marketplaceData = db.prepare(`
-        SELECT CASE strftime('%w', o.order_date)
-                 WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday'
-                 WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday'
-                 ELSE 'Saturday' END AS label,
-               strftime('%w', o.order_date) AS date,
+        SELECT date(o.order_date, '-' || ((CAST(strftime('%w', o.order_date) AS INTEGER) + 6) % 7) || ' days') AS date,
+               date(o.order_date, '-' || ((CAST(strftime('%w', o.order_date) AS INTEGER) + 6) % 7) || ' days') AS label,
                COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue,
                COUNT(DISTINCT o.order_id) AS orders,
                COALESCE(SUM(oi.quantity), 0) AS unitsSold,
                ROUND(COALESCE(AVG(o.total_amount), 0), 2) AS aov
         FROM analytics_orders o
         JOIN analytics_order_items oi ON oi.order_id = o.order_id
-        GROUP BY strftime('%w', o.order_date)
-        ORDER BY CAST(strftime('%w', o.order_date) AS INTEGER) ASC
+        GROUP BY date(o.order_date, '-' || ((CAST(strftime('%w', o.order_date) AS INTEGER) + 6) % 7) || ' days')
+        ORDER BY date ASC
       `).all();
     } else {
       const daySlice = timeframe === "90d" ? -90 : timeframe === "year" ? -365 : -30;

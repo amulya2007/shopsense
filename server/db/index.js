@@ -85,6 +85,9 @@ CREATE INDEX IF NOT EXISTS idx_analytics_orders_customer ON analytics_orders(cus
 CREATE INDEX IF NOT EXISTS idx_analytics_orders_date ON analytics_orders(order_date);
 CREATE INDEX IF NOT EXISTS idx_analytics_order_items_product ON analytics_order_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_order_items_order ON analytics_order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_products_vendor_stock ON products(vendor_id, stock, name);
+CREATE INDEX IF NOT EXISTS idx_sales_vendor_date ON sales(vendor_id, sold_at);
+CREATE INDEX IF NOT EXISTS idx_sales_vendor_product ON sales(vendor_id, product_id);
 `);
 
 // Existing installations keep their SQLite database between server restarts.
@@ -208,4 +211,3 @@ if (salesCount === 0) {
 }
 
 module.exports = db;
-
