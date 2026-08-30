@@ -1,4 +1,12 @@
 ﻿const db = require("../db");
+const {
+  extractProductIdentity,
+  isGenericCatalogDescription,
+  isSameProductKind,
+  isRelevantRetrievedProduct,
+  nameOverlap,
+  generateLocalDescription
+} = require("./productIdentity");
 
 // ---------------------------------------------------------------------------
 // In-memory Vector Store
@@ -223,7 +231,8 @@ function buildVectorStore() {
     `).all();
 
     liveProducts.forEach((p) => {
-      const textContent = `${p.name} ${p.description || ""} Category: ${p.category} Vendor: ${p.vendor_name || "Verified Vendor"} Price: ₹${p.price} Stock: ${p.stock} units`;
+      const identity = extractProductIdentity(p.name);
+      const textContent = `${p.name} ${p.name} ${identity.type || ""} ${p.description || ""} Category: ${p.category} Vendor: ${p.vendor_name || "Verified Vendor"} Price: ₹${p.price} Stock: ${p.stock} units`;
       const vector = generateVector(textContent, p.category, p.price);
       documents.push({
         id: String(p.id),
@@ -251,7 +260,8 @@ function buildVectorStore() {
     `).all();
 
     datasetProducts.forEach((p) => {
-      const textContent = `${p.name} Category: ${p.category} Price: ₹${p.price} Stock: ${p.stock} units ShopSense Marketplace Catalog`;
+      const identity = extractProductIdentity(p.name);
+      const textContent = `${p.name} ${p.name} ${identity.type || ""} Category: ${p.category} Price: ₹${p.price} Stock: ${p.stock} units ShopSense Marketplace Catalog`;
       const vector = generateVector(textContent, p.category, p.price);
       documents.push({
         id: String(p.id),
@@ -304,17 +314,32 @@ function retrieveProducts(query, topK = 6, conversationContext = "") {
   const queryVector = generateVector(fullQuery);
   const queryTokens = tokenize(fullQuery);
   const constraints = extractQueryConstraints(fullQuery);
+  const queryIdentity = extractProductIdentity(fullQuery);
 
   // ---- Score every document ----
   const scored = vectorStore.map((doc) => {
     let similarity = cosineSimilarity(queryVector, doc.vector);
 
-    // Token overlap boost (name + category + description)
+    // Token overlap boost — product name matters more than category text
+    const nameTokens = new Set(tokenize(doc.name));
     const docTokenSet = new Set(tokenize(`${doc.name} ${doc.category} ${doc.description}`));
     let overlap = 0;
-    queryTokens.forEach((qt) => { if (docTokenSet.has(qt)) overlap++; });
+    let nameHits = 0;
+    queryTokens.forEach((qt) => {
+      if (docTokenSet.has(qt)) overlap++;
+      if (nameTokens.has(qt)) nameHits++;
+    });
     const overlapRatio = queryTokens.length > 0 ? overlap / queryTokens.length : 0;
-    similarity += overlapRatio * 0.4;
+    const nameRatio = queryTokens.length > 0 ? nameHits / queryTokens.length : 0;
+    similarity += overlapRatio * 0.25 + nameRatio * 0.55;
+    similarity += nameOverlap(fullQuery, doc.name) * 0.35;
+
+    const docIdentity = extractProductIdentity(doc.name);
+    if (queryIdentity.type && docIdentity.type === queryIdentity.type) {
+      similarity += 0.55;
+    } else if (queryIdentity.type && docIdentity.type && docIdentity.type !== queryIdentity.type) {
+      similarity -= 1.5;
+    }
 
     // ---- Hard constraint PENALTIES (will push disqualified items to bottom) ----
     let hardPenalty = 0;
@@ -350,8 +375,11 @@ function retrieveProducts(query, topK = 6, conversationContext = "") {
   });
 
   // ---- Apply hard constraints strictly ----
-  // Separate disqualified from valid
-  const valid      = scored.filter(s => s.hardPenalty === 0);
+  let valid = scored.filter(s => s.hardPenalty === 0);
+  if (queryIdentity.type) {
+    const typed = valid.filter((s) => isSameProductKind(fullQuery, s.doc.name, "", s.doc.category));
+    if (typed.length > 0) valid = typed;
+  }
   const disqualified = scored.filter(s => s.hardPenalty > 0);
 
   // Sort valid by similarity descending
@@ -425,7 +453,8 @@ STRICT GROUNDING RULES:
 4. If no products match the criteria, clearly say so and do NOT invent alternatives.
 5. Popularity claims MUST be based on "Units Sold (historical)" from the context — do not call a product popular without this evidence.
 6. For "best for video editing / gaming / students" etc.: if technical specs like CPU/RAM/GPU are not in the context, say: "The ShopSense catalog does not contain enough technical specifications to determine the best option for [use case]. Here are the most relevant available products."
-7. Be concise. Show products with Price, Stock, Category. Avoid excessive marketing language.`;
+7. If the user named a specific product type (keyboard, mouse, lipstick, etc.), only discuss retrieved products of that type. Do not blend accessories that merely share a department.
+8. Be concise. Show products with Price, Stock, Category. Avoid excessive marketing language.`;
 
   const userPrompt = `Retrieved Catalog Context:\n${catalogContext || "No matching products found in the catalog."}${constraintNote}\n\nUser Question: ${question}`;
 
@@ -595,80 +624,91 @@ function buildConversationContext(history = []) {
   return mentions.join(" ");
 }
 
+function retrieveRelevantContext(productName, category = "", topK = 4) {
+  if (!isInitialized || vectorStore.length === 0) buildVectorStore();
+  const queryIdentity = extractProductIdentity(productName, category);
+  const ranked = vectorStore
+    .filter((doc) => isRelevantRetrievedProduct(productName, category, doc))
+    .map((doc) => {
+      const typeBoost = queryIdentity.type && extractProductIdentity(doc.name, doc.category).type === queryIdentity.type ? 0.5 : 0;
+      const liveBoost = doc.origin === "live_catalog" && !isGenericCatalogDescription(doc.description) ? 0.25 : 0;
+      return {
+        doc,
+        score: nameOverlap(productName, doc.name) + typeBoost + liveBoost
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const relevant = [];
+  const seenNames = new Set();
+  for (const item of ranked) {
+    const nameKey = String(item.doc.name || "").toLowerCase();
+    if (seenNames.has(nameKey)) continue;
+    if (isGenericCatalogDescription(item.doc.description)) continue;
+    seenNames.add(nameKey);
+    relevant.push(item.doc);
+    if (relevant.length >= topK) break;
+  }
+  return relevant;
+}
+
 // ---------------------------------------------------------------------------
 // Product Description Generator
-// Generates a professional e-commerce description from name + category only.
-// Strictly no invented specs — only uses what the vendor provides.
+// Product name is the source of truth. RAG context is used only when relevant.
 // ---------------------------------------------------------------------------
 async function generateProductDescription(name, category, extraHints = "") {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
   const openAiKey = process.env.OPENAI_API_KEY;
+  const productName = String(name || "").trim();
+  const productCategory = String(category || "").trim();
+  const hints = String(extraHints || "").trim();
+  const identity = extractProductIdentity(productName);
 
-  // Retrieve similar products from the vector store to populate {{context}}.
-  // These are passed as supporting reference only — the prompt rules instruct the
-  // LLM to ignore context that conflicts with or is unrelated to the product name.
-  let contextBlock = "No similar products found in the catalog.";
+  let relevantProducts = [];
   try {
-    if (isInitialized && vectorStore.length > 0) {
-      const { products: similar } = retrieveProducts(`${name} ${category}`, 3);
-      if (similar.length > 0) {
-        contextBlock = similar.map((p, i) =>
-          `[${i + 1}] Name: ${p.name} | Category: ${p.category} | Description: ${p.description}`
-        ).join("\n");
-      }
-    }
-  } catch (_) {
-    // context is optional — proceed without it
+    relevantProducts = retrieveRelevantContext(productName, productCategory, 3);
+  } catch (err) {
+    console.warn("[RAG] Description retrieval failed:", err.message);
   }
 
-  // ── Enhanced prompt for detailed, realistic descriptions ──────────────────
-  const prompt = `You are an expert e-commerce product description writer for a professional marketplace.
+  let contextBlock = "No relevant catalog documents were retrieved. Write only from the product name, category, and vendor notes.";
+  if (relevantProducts.length > 0) {
+    contextBlock = relevantProducts.map((p, i) =>
+      `[${i + 1}] Name: ${p.name} | Category: ${p.category} | Origin: ${p.origin} | Description: ${p.description}`
+    ).join("\n");
+  }
 
-Your task is to create a detailed, natural, and realistic product description based on the product name and category.
+  const prompt = `You are writing a professional marketplace product description.
 
-PRODUCT NAME:
-${name}
+PRIMARY SOURCE OF TRUTH
+Product name: ${productName}
+Category: ${productCategory || "not specified"}
+Vendor notes: ${hints || "none"}
+Identified product type: ${identity.type || "use the product name itself"}
 
-CATEGORY:
-${category}
-
-RETRIEVED PRODUCT CONTEXT (use as reference if relevant):
+RELEVANT RETRIEVED CONTEXT (already filtered; ignore anything that is not clearly the same product type):
 ${contextBlock}
 
-IMPORTANT RULES:
-1. The product name is the PRIMARY source of truth - describe exactly what it indicates.
-2. Write 4-6 sentences (approximately 80-150 words) with good detail.
-3. Structure: Start with what the product is, then who it's for, key benefits, and typical use cases.
-4. Be specific about the product type while staying factual.
-5. Use engaging, professional e-commerce language (like Amazon, Flipkart, or Myntra).
-6. Do NOT invent: specific brand features, exact measurements, certifications, warranties, or technical specs UNLESS in the product name.
-7. DO describe: general category features, typical uses, common benefits, target audience, and standard expectations.
-8. Retrieved context is supporting info only - ignore if unrelated to the product name.
-9. Make it sound natural and helpful, like an experienced product copywriter wrote it.
-10. Return ONLY the description. No headings, bullets, or JSON.
+PIPELINE
+1. Understand the product from the name first.
+2. Use retrieved context only when it describes the same kind of product (for example, another keyboard when this listing is a keyboard).
+3. Discard retrieved text about a different item even if the category matches (a wireless mouse must not influence a wireless keyboard).
+4. If retrieved context is missing or weak, write from the product name and category only.
 
-Examples:
+WRITING REQUIREMENTS
+- Write 2 to 3 short paragraphs of natural e-commerce copy (about 120–220 words).
+- Paragraph 1: what this exact product is, using the product name.
+- Paragraph 2: who it is for and how it is typically used, based only on the name/type.
+- Paragraph 3 (optional): buying context, category fit, and any vendor notes — still no invented specs.
+- Sound like a careful human copywriter, not a template of "perfect for everyday use" filler.
+- Do not repeat the same sentence in different words.
 
-Product name: Matte Liquid Lipstick
-Category: Beauty
-Output:
-"A modern liquid lipstick that delivers rich, matte color with a smooth, lightweight feel. Perfect for makeup enthusiasts who want long-lasting color that stays vibrant throughout the day without frequent touch-ups. The liquid formula glides on easily and dries to a comfortable matte finish, making it ideal for both everyday wear and special occasions. Whether you're heading to the office, meeting friends, or attending an evening event, this lipstick provides the bold, confident look you're after while feeling comfortable on your lips."
+ACCURACY — DO NOT INVENT
+Do not add specifications, dimensions, materials, colors, ingredients, certifications, warranty, performance numbers, compatibility lists, brand claims, or technical features unless they already appear in the product name, vendor notes, or a retrieved description for the SAME product type.
+If a detail is unknown, omit it. Do not pad with empty praise.
 
-Product name: Wireless Noise-Canceling Headphones
-Category: Audio
-Output:
-"Premium wireless headphones designed for music lovers and professionals who demand superior audio quality without the hassle of cables. These headphones feature advanced noise-canceling technology that blocks out ambient sounds, allowing you to fully immerse yourself in your music, podcasts, or calls. Perfect for daily commutes, air travel, focused work sessions, or simply relaxing at home with your favorite playlist. The wireless connectivity gives you freedom of movement while the comfortable design ensures you can wear them for extended periods without discomfort. Whether you're working from home, at the gym, or on the go, these headphones adapt seamlessly to your lifestyle."
+Return ONLY the description text.`;
 
-Product name: Running Shoes
-Category: Footwear
-Output:
-"Athletic running shoes engineered for runners who take their training seriously and demand both performance and comfort. These shoes are designed to support your natural running motion while providing essential cushioning to absorb impact with each stride. Ideal for road running, track workouts, or casual jogs through the park, they offer the durability needed to handle regular training schedules. The thoughtful construction helps reduce fatigue during longer runs while maintaining a responsive feel that keeps you connected to the ground. Whether you're training for your first 5K or logging serious weekly mileage, these shoes provide the reliable foundation every runner needs."
-
-Now generate a detailed, realistic description for:
-${name}`;
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // 1. Google Gemini
   if (geminiKey && geminiKey !== "your_key_here") {
     try {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
@@ -677,20 +717,19 @@ ${name}`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 350 }
+          generationConfig: { temperature: 0.45, maxOutputTokens: 700 }
         })
       });
       if (response.ok) {
         const result = await response.json();
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text && text.trim().length > 10) return text.trim().replace(/^["']|["']$/g, "");
+        if (text && text.trim().length > 40) return text.trim().replace(/^["']|["']$/g, "");
       }
     } catch (err) {
       console.warn("[RAG] Gemini description generation failed:", err.message);
     }
   }
 
-  // 2. OpenAI
   if (openAiKey && openAiKey !== "your_key_here") {
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -702,358 +741,23 @@ ${name}`;
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.5,
-          max_tokens: 350
+          temperature: 0.45,
+          max_tokens: 700
         })
       });
       if (response.ok) {
         const result = await response.json();
         const text = result.choices?.[0]?.message?.content;
-        if (text && text.trim().length > 10) return text.trim().replace(/^["']|["']$/g, "");
+        if (text && text.trim().length > 40) return text.trim().replace(/^["']|["']$/g, "");
       }
     } catch (err) {
       console.warn("[RAG] OpenAI description generation failed:", err.message);
     }
   }
 
-  // 3. Local rule-based fallback — honest, grounded, no invented specs
-  return generateLocalDescription(name, category);
+  return generateLocalDescription(productName, productCategory, hints);
 }
 
-// Local description generator — follows the exact same 10 rules as the LLM prompt.
-// Reads the product name to understand WHAT the product is, then writes a
-// natural 1–2 sentence description without inventing any spec not in the name.
-function generateLocalDescription(name, category) {
-  const n   = (name     || "").trim();
-  const cat = (category || "").trim().toLowerCase();
-  const low = n.toLowerCase();
-
-  // sub() — substring match (safe for multi-word phrases)
-  const sub  = (...words) => words.some(w => low.includes(w));
-  // word() — whole-word match (use for short tokens that appear inside other words)
-  const word = (...words) => words.some(w =>
-    new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(low)
-  );
-
-  // ── Core product identification ──────────────────────────────────────────
-  // Identify WHAT the product IS based solely on the name
-
-  // Beauty & Cosmetics
-  if (sub("lipstick") || sub("lip stick")) {
-    return "A modern cosmetic lip product designed to add rich color and enhance the appearance of your lips with lasting wear. Perfect for makeup enthusiasts who want vibrant color that stays put throughout the day, this lipstick is suitable for both everyday looks and special occasions. Whether you're creating a professional office look, casual daytime style, or glamorous evening makeup, it helps you achieve a polished, confident appearance with ease.";
-  }
-  if (sub("lip gloss")) {
-    return "A cosmetic lip product designed to add shine, dimension, and a touch of color to enhance the natural beauty of your lips. Ideal for creating a fresh, youthful look or adding the perfect finishing touch to any makeup style. The smooth formula glides on comfortably and can be worn alone for a natural look or layered over lipstick for extra shine and dimension.";
-  }
-  if (sub("foundation")) {
-    return "A facial cosmetic base product designed to create an even, flawless complexion and provide the perfect canvas for makeup application. This foundation helps minimize the appearance of imperfections while enhancing your natural skin tone. Suitable for daily wear, it works well for various occasions from professional settings to social events, helping you achieve a polished, confident look that lasts throughout the day.";
-  }
-  if (sub("concealer")) {
-    return "A facial cosmetic product designed to cover and conceal specific areas during makeup application.";
-  }
-  if (sub("mascara")) {
-    return "A cosmetic product designed to enhance the appearance of eyelashes.";
-  }
-  if (sub("perfume") || sub("fragrance") || sub("cologne")) {
-    return "A scented product designed for personal fragrance use.";
-  }
-  if (sub("shampoo")) {
-    return "A hair care product designed for washing and cleansing hair.";
-  }
-  if (sub("conditioner")) {
-    return "A hair care product designed for use after shampooing.";
-  }
-  if (sub("moisturizer") || sub("lotion")) {
-    return "A skin care product designed for regular application to the skin.";
-  }
-  if (word("cream") && (cat.includes("beauty") || cat.includes("skin"))) {
-    return "A skin care product designed for topical application.";
-  }
-  if (sub("serum") && (cat.includes("beauty") || cat.includes("skin"))) {
-    return "A concentrated skin care product designed for targeted application.";
-  }
-  if (sub("sunscreen") || word("spf")) {
-    return "A skin protection product designed for sun exposure situations.";
-  }
-
-  // Audio Products
-  if (sub("wireless headphone") || (sub("headphone") && (sub("wireless") || word("bluetooth")))) {
-    return "Premium wireless headphones designed for music lovers and professionals seeking high-quality audio without the constraints of cables. These headphones offer the freedom to move while enjoying your favorite music, podcasts, calls, and entertainment content. Perfect for daily commutes, workouts, travel, or focused work sessions, they provide a comfortable listening experience with the convenience of wireless connectivity. Whether you're streaming your playlist, taking important calls, or immersing yourself in a podcast, these headphones adapt seamlessly to your active lifestyle.";
-  }
-  if (sub("headphone") || sub("headset")) {
-    return "Quality audio headphones designed for comfortable listening to music, podcasts, calls, and other audio content throughout your day. These headphones deliver clear, balanced sound that brings your entertainment and communication to life. Ideal for work, study, gaming, or leisure, they provide the audio quality and comfort you need for extended listening sessions.";
-  }
-  if (sub("earbud") || sub("earphone")) {
-    return "Compact audio earphones designed for personal listening on the go, offering a convenient way to enjoy music, podcasts, and calls wherever life takes you. Their portable design makes them perfect for commuting, exercise, travel, or any time you want to enjoy audio content without bulk. The lightweight construction ensures comfortable wear for extended periods while delivering quality sound.";
-  }
-  if (sub("speaker")) {
-    return "An audio speaker designed for playing music and other audio content.";
-  }
-  if (sub("soundbar")) {
-    return "An audio device designed to enhance sound output for entertainment systems.";
-  }
-  if (sub("microphone") || word("mic")) {
-    return "A microphone designed for capturing and recording audio input.";
-  }
-
-  // Computing
-  if (word("gaming") && (sub("laptop") || sub("notebook"))) {
-    return "A laptop computer designed for gaming and high-performance computing tasks.";
-  }
-  if (sub("laptop")) {
-    return "A laptop computer designed for everyday computing tasks including work, study, and general use.";
-  }
-  // "notebook" only as laptop if category suggests computing
-  if (sub("notebook") && (cat.includes("comput") || cat.includes("electronic") || cat.includes("tech"))) {
-    return "A laptop computer designed for everyday computing tasks including work, study, and general use.";
-  }
-  if (sub("desktop")) {
-    return "A desktop computer designed for computing tasks in a stationary workspace.";
-  }
-  if (sub("tablet")) {
-    return "A tablet computing device designed for digital tasks including browsing, media consumption, and everyday use.";
-  }
-  if (sub("keyboard")) {
-    return "A keyboard input device designed for typing and data entry.";
-  }
-  if (word("mouse") && !sub("pad")) {
-    return "A computer mouse designed for cursor navigation and input control.";
-  }
-  if (sub("monitor") || (word("display") && cat.includes("compute"))) {
-    return "A display monitor designed for visual output from computing devices.";
-  }
-  if (sub("webcam")) {
-    return "A webcam designed for video capture during video calls and recording.";
-  }
-  if (sub("router")) {
-    return "A network router designed to manage and distribute internet connectivity.";
-  }
-  if (sub("hard drive") || word("hdd") || word("ssd") || sub("storage drive")) {
-    return "A data storage drive designed for storing digital files and information.";
-  }
-  if (sub("power bank")) {
-    return "A portable power bank designed to recharge electronic devices.";
-  }
-  if (word("charger")) {
-    return "A charging device designed to power electronic devices.";
-  }
-  if (sub("usb hub")) {
-    return "A USB hub designed to expand available USB ports for connecting devices.";
-  }
-  if (word("cable") && (cat.includes("compute") || cat.includes("electronic") || cat.includes("accessory"))) {
-    return "A cable designed for connecting electronic devices.";
-  }
-
-  // Wearables
-  if (sub("smartwatch") || sub("smart watch")) {
-    return "A smartwatch designed as a wearable device for time display and digital features.";
-  }
-  if (sub("fitness band") || sub("fitness tracker")) {
-    return "A fitness tracker designed as a wearable device for activity monitoring.";
-  }
-  if (sub("smart band")) {
-    return "A smart band designed as a wearable device with digital features.";
-  }
-  if (word("watch") && !sub("smart")) {
-    return "A watch designed for timekeeping and personal wear.";
-  }
-
-  // Phones & Accessories
-  if (sub("smartphone") || sub("mobile phone")) {
-    return "A smartphone designed for communication, digital tasks, and mobile computing.";
-  }
-  if (sub("phone case")) {
-    return "A phone case designed to protect mobile devices.";
-  }
-  if (sub("screen protector")) {
-    return "A screen protector designed to shield device displays from damage.";
-  }
-
-  // Electronics
-  if (word("camera")) {
-    return "A camera designed for capturing photographs and video recordings.";
-  }
-  if (sub("projector")) {
-    return "A projector designed to display visual content on screens or surfaces.";
-  }
-  if (word("tv") || sub("television")) {
-    return "A television designed for viewing broadcast, streaming, and video content.";
-  }
-  if (word("drone")) {
-    return "A drone designed as a flying device for aerial use.";
-  }
-  if (sub("printer")) {
-    return "A printer designed to produce physical copies of digital documents and images.";
-  }
-  if (sub("scanner")) {
-    return "A scanner designed to digitize physical documents and images.";
-  }
-
-  // Footwear
-  if (sub("running shoe") || (word("shoe") && word("running"))) {
-    return "A pair of athletic shoes designed for running and athletic activities.";
-  }
-  if (sub("sneaker") || word("trainers")) {
-    return "A pair of sneakers designed for casual and athletic wear.";
-  }
-  if (word("shoe") || word("shoes")) {
-    return "A pair of shoes designed for everyday footwear use.";
-  }
-  if (word("boot") || word("boots")) {
-    return "A pair of boots designed for footwear protection and style.";
-  }
-  if (word("sandal") || word("sandals")) {
-    return "A pair of sandals designed as open footwear for casual wear.";
-  }
-
-  // Fashion & Apparel
-  if (sub("t-shirt") || sub("tshirt") || (word("shirt") && cat.includes("fashion"))) {
-    return "A shirt designed for casual and everyday wear.";
-  }
-  if (sub("trouser") || word("pant") || word("pants")) {
-    return "A pair of trousers designed for everyday clothing wear.";
-  }
-  if (sub("jacket")) {
-    return "A jacket designed as an outer garment for layering and wear.";
-  }
-  if (word("coat")) {
-    return "A coat designed as outerwear for protection and style.";
-  }
-  if (word("dress") && cat.includes("fashion")) {
-    return "A dress designed as a one-piece garment for wear.";
-  }
-  if (sub("backpack")) {
-    return "A backpack designed for carrying items on the back during daily activities.";
-  }
-  if (sub("handbag") || (word("bag") && cat.includes("fashion"))) {
-    return "A bag designed for carrying personal items and essentials.";
-  }
-  if (sub("wallet")) {
-    return "A wallet designed to hold cards, cash, and personal items.";
-  }
-  if (word("belt")) {
-    return "A belt designed as an accessory for securing clothing at the waist.";
-  }
-  if (sub("sunglasses") || (word("glasses") && cat.includes("fashion"))) {
-    return "Eyewear designed for sun protection and style.";
-  }
-
-  // Home & Kitchen
-  if (sub("coffee maker") || sub("coffee machine")) {
-    return "A coffee maker designed for brewing coffee beverages.";
-  }
-  if (sub("water bottle")) {
-    return "A water bottle designed for storing and carrying drinking water.";
-  }
-  if (word("bottle") && !sub("water")) {
-    return "A bottle designed for storing and transporting liquids.";
-  }
-  if (word("mug") || (word("cup") && cat.includes("home"))) {
-    return "A mug designed for holding and drinking hot and cold beverages.";
-  }
-  if (sub("plate") || word("bowl") || word("dish")) {
-    return "Kitchenware designed for serving and holding food.";
-  }
-  if (sub("cutlery") || (word("knife") && cat.includes("kitchen"))) {
-    return "Cutlery designed for eating and food preparation.";
-  }
-  if (word("pan") || word("pot") || sub("cookware")) {
-    return "Cookware designed for preparing and cooking food.";
-  }
-  if (sub("blender") || sub("juicer") || word("mixer")) {
-    return "A kitchen appliance designed for blending and mixing food ingredients.";
-  }
-  if (sub("toaster") || sub("microwave") || (word("oven") && cat.includes("kitchen"))) {
-    return "A kitchen appliance designed for heating and cooking food.";
-  }
-  if (sub("kettle")) {
-    return "A kettle designed for heating water and liquids.";
-  }
-  if (sub("pillow") || sub("cushion")) {
-    return "A cushion designed for comfort and support during rest.";
-  }
-  if (word("lamp") || (word("light") && cat.includes("home"))) {
-    return "A lamp designed to provide illumination in indoor spaces.";
-  }
-  if (word("chair")) {
-    return "A chair designed as seating furniture for everyday use.";
-  }
-  if (word("desk") || word("table")) {
-    return "A table designed as furniture for work, dining, or general use.";
-  }
-  if (sub("bookcase") || word("shelf") || word("shelves")) {
-    return "A shelf unit designed for storage and display of items.";
-  }
-  if (sub("clock")) {
-    return "A clock designed for timekeeping and display.";
-  }
-  if (sub("vacuum")) {
-    return "A vacuum cleaner designed for cleaning floors and surfaces.";
-  }
-
-  // Sports & Fitness
-  if (sub("yoga mat")) {
-    return "A yoga mat designed for yoga practice and floor exercises.";
-  }
-  if (sub("dumbbell") || sub("barbell") || (word("weight") && cat.includes("sport"))) {
-    return "Fitness equipment designed for strength training exercises.";
-  }
-  if (sub("resistance band")) {
-    return "A resistance band designed for strength and flexibility exercises.";
-  }
-  if (sub("bicycle") || word("bike") || word("cycle")) {
-    return "A bicycle designed for cycling and transportation.";
-  }
-  if (sub("treadmill")) {
-    return "A treadmill designed as exercise equipment for indoor running and walking.";
-  }
-  if (sub("helmet")) {
-    return "A helmet designed for head protection during activities.";
-  }
-
-  // Groceries & Food
-  if (sub("snack") || sub("chips") || sub("biscuit") || sub("cookie")) {
-    return "A snack food item designed for consumption between meals.";
-  }
-  if ((word("oil") || word("sauce") || word("spice")) && cat.includes("grocer")) {
-    return "A food ingredient designed for cooking and meal preparation.";
-  }
-  if ((word("coffee") || word("tea")) && cat.includes("grocer")) {
-    return "A beverage product designed for drinking.";
-  }
-
-  // ── Generic fallback based on category ───────────────────────────────────
-  if (cat.includes("audio")) {
-    return `An audio product designed for listening and sound-related activities.`;
-  }
-  if (cat.includes("electronics") || cat.includes("electronic")) {
-    return `An electronics product designed for everyday use.`;
-  }
-  if (cat.includes("compute") || cat.includes("computer")) {
-    return `A computing product designed for digital tasks and everyday use.`;
-  }
-  if (cat.includes("wearable")) {
-    return `A wearable device designed for personal wear and digital features.`;
-  }
-  if (cat.includes("fashion") || cat.includes("apparel") || cat.includes("clothing")) {
-    return `A fashion item designed for everyday wear.`;
-  }
-  if (cat.includes("beauty") || cat.includes("cosmetic")) {
-    return `A personal care product designed for everyday grooming and beauty use.`;
-  }
-  if (cat.includes("home") || cat.includes("kitchen")) {
-    return `A home product designed for everyday household use.`;
-  }
-  if (cat.includes("sport") || cat.includes("fitness")) {
-    return `A sports product designed for physical activity and exercise.`;
-  }
-  if (cat.includes("grocer") || cat.includes("food")) {
-    return `A food product designed for consumption.`;
-  }
-
-  // ── Absolute fallback ─────────────────────────────────────────────────────
-  return `A product designed for everyday use.`;
-}
 async function answerShoppingQuestion(question, conversationHistory = []) {
   if (!question || typeof question !== "string" || !question.trim()) {
     throw new Error("A valid question string is required.");
@@ -1092,6 +796,7 @@ buildVectorStore();
 module.exports = {
   answerShoppingQuestion,
   retrieveProducts,
+  retrieveRelevantContext,
   buildVectorStore,
   buildPopularityIndex,
   generateProductDescription,

@@ -336,11 +336,11 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
 
   const series = useMemo(() => {
     if (!data) return [];
-    // Handle direct data array from reporting API
-    if (Array.isArray(data.data) && data.data.length > 0) {
+    const fromReportingApi = Array.isArray(data.data);
+    if (fromReportingApi) {
       return data.data.map((item) => ({
-        label: item.label || (item.date ? item.date.slice(5) : ""),
-        fullDate: item.date || item.label || "",
+        label: item.label || item.period || (item.date ? String(item.date).slice(5) : ""),
+        fullDate: item.label || item.period || item.date || "",
         revenue: Number(item.revenue || 0),
         units: Number(item.unitsSold || item.units || item.purchases || 0),
         orders: Number(item.orders || 0),
@@ -478,8 +478,9 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
   return (
     <div className="space-y-4">
       {/* Controls Bar: Metrics & Timeframes */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 pb-3">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-4" style={{ borderColor: "var(--border)" }}>
+        {/* Metric Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
           {[
             { id: "revenue", label: "Revenue (₹)", icon: DollarSign },
             { id: "units", label: "Units Sold", icon: Boxes },
@@ -490,7 +491,7 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
               key={m.id}
               type="button"
               onClick={() => setMetric(m.id)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all"
               style={{
                 background: metric === m.id ? "var(--primary)" : "var(--surface)",
                 color: metric === m.id ? "white" : "var(--ink-soft)",
@@ -502,28 +503,34 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
           ))}
         </div>
 
-        <div className="flex rounded-lg p-0.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          {[
-            { id: "30d", label: "Day" },
-            { id: "week", label: "Week" },
-            { id: "month", label: "Month" }
-          ].map((tf) => (
-            <button
-              key={tf.id}
-              type="button"
-              onClick={() => {
-                handleTimeframeChange(tf.id);
-                setHoverIndex(null);
-              }}
-              className="rounded-md px-4 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                background: timeframe === tf.id ? "var(--primary)" : "transparent",
-                color: timeframe === tf.id ? "white" : "var(--ink-soft)"
-              }}
-            >
-              {tf.label}
-            </button>
-          ))}
+        {/* Timeframe Toggle Buttons */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold mr-1" style={{ color: "var(--ink-soft)" }}>Period:</span>
+          <div className="flex rounded-lg overflow-hidden" style={{ border: "2px solid var(--border)" }}>
+            {[
+              { id: "30d", label: "Day" },
+              { id: "week", label: "Week" },
+              { id: "month", label: "Month" }
+            ].map((tf, idx) => (
+              <button
+                key={tf.id}
+                type="button"
+                onClick={() => {
+                  handleTimeframeChange(tf.id);
+                  setHoverIndex(null);
+                }}
+                className="px-4 py-2 text-sm font-bold transition-all"
+                style={{
+                  background: timeframe === tf.id ? "var(--primary)" : "white",
+                  color: timeframe === tf.id ? "white" : "var(--ink)",
+                  borderRight: idx < 2 ? "1px solid var(--border)" : "none",
+                  minWidth: "70px"
+                }}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1440,7 +1447,7 @@ export default function VendorInsights() {
             icon={BarChart3}
             eyebrow={`Sales & Reporting · ${reportingScope === "vendor" ? "Vendor Live Sales" : "Marketplace Dataset"}`}
             title="Sales Performance Over Time"
-            description={`Revenue and sales volume trends (${reportingScope === "vendor" ? "Live Vendor Transactions" : "Marketplace Dataset"}) with smooth spline curves and metric toggles.`}
+            description={`Revenue and unit volume grouped by the selected calendar period (${reportingScope === "vendor" ? "your sales" : "marketplace orders"}). Day uses each calendar day, Week uses Monday–Sunday weeks, Month uses calendar months. Empty periods show as zero.`}
           >
             <SpaciousSalesChart 
               data={reportingData?.salesOverTime || data.sales} 
