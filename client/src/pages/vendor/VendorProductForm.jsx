@@ -252,18 +252,45 @@ export default function VendorProductForm() {
               <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
                 Category <span style={{ color: "var(--danger)" }}>*</span>
               </label>
-              <select
-                required
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg text-sm focus-ring"
-                style={{ border: "1px solid var(--border)" }}
-              >
-                <option value="">Select a category</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              {form.category === "Other" || (form.category && !CATEGORIES.includes(form.category)) ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    required
+                    value={form.category === "Other" ? "" : form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    placeholder="Enter custom category (e.g., Furniture, Toys, Books)"
+                    className="w-full px-4 py-3 rounded-lg text-sm focus-ring"
+                    style={{ border: "1px solid var(--border)" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, category: "" })}
+                    className="text-xs hover:underline"
+                    style={{ color: "var(--primary)" }}
+                  >
+                    ← Back to category list
+                  </button>
+                </div>
+              ) : (
+                <select
+                  required
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg text-sm focus-ring"
+                  style={{ border: "1px solid var(--border)" }}
+                >
+                  <option value="">Select a category</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
+              <p className="mt-2 text-xs" style={{ color: "var(--ink-soft)" }}>
+                {form.category === "Other" || (form.category && !CATEGORIES.includes(form.category))
+                  ? "Enter a custom category name that best describes your product"
+                  : "Select 'Other' to enter a custom category"}
+              </p>
             </div>
 
             {/* Description with AI */}
@@ -295,7 +322,7 @@ export default function VendorProductForm() {
               </div>
               <textarea
                 required
-                rows={4}
+                rows={6}
                 value={form.description}
                 onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescError(""); }}
                 placeholder="Describe your product features, benefits, and key details..."

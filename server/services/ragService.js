@@ -621,10 +621,10 @@ async function generateProductDescription(name, category, extraHints = "") {
     // context is optional — proceed without it
   }
 
-  // ── Your exact prompt template (variables filled in) ──────────────────────
-  const prompt = `You are an expert e-commerce product description generator.
+  // ── Enhanced prompt for detailed, realistic descriptions ──────────────────
+  const prompt = `You are an expert e-commerce product description writer for a professional marketplace.
 
-Your task is to generate an accurate, natural, and useful product description based on the product name provided by the user.
+Your task is to create a detailed, natural, and realistic product description based on the product name and category.
 
 PRODUCT NAME:
 ${name}
@@ -632,39 +632,39 @@ ${name}
 CATEGORY:
 ${category}
 
-RETRIEVED PRODUCT CONTEXT:
+RETRIEVED PRODUCT CONTEXT (use as reference if relevant):
 ${contextBlock}
 
 IMPORTANT RULES:
-1. The product name is the PRIMARY source of truth.
-2. Generate a description that accurately matches the product name.
-3. Never describe the product as something unrelated to its name.
-4. Retrieved context is only supporting information. If it is unrelated or conflicts with the product name, IGNORE it.
-5. Do not copy descriptions from retrieved products.
-6. Do not invent specific technical specifications, materials, brands, ingredients, features, certifications, or performance claims unless they are explicitly provided.
-7. Do not assume a product belongs to a category just because a retrieved product has that category.
-8. Keep the description concise: 1–3 sentences.
-9. Use professional, customer-friendly e-commerce language.
-10. Return ONLY the product description. Do not include headings, explanations, or JSON.
+1. The product name is the PRIMARY source of truth - describe exactly what it indicates.
+2. Write 4-6 sentences (approximately 80-150 words) with good detail.
+3. Structure: Start with what the product is, then who it's for, key benefits, and typical use cases.
+4. Be specific about the product type while staying factual.
+5. Use engaging, professional e-commerce language (like Amazon, Flipkart, or Myntra).
+6. Do NOT invent: specific brand features, exact measurements, certifications, warranties, or technical specs UNLESS in the product name.
+7. DO describe: general category features, typical uses, common benefits, target audience, and standard expectations.
+8. Retrieved context is supporting info only - ignore if unrelated to the product name.
+9. Make it sound natural and helpful, like an experienced product copywriter wrote it.
+10. Return ONLY the description. No headings, bullets, or JSON.
 
 Examples:
 
-Product name: lipstick
+Product name: Matte Liquid Lipstick
 Category: Beauty
 Output:
-"A cosmetic lip product designed to add rich color and enhance the appearance of the lips. It is suitable for everyday makeup and helps create a polished look."
+"A modern liquid lipstick that delivers rich, matte color with a smooth, lightweight feel. Perfect for makeup enthusiasts who want long-lasting color that stays vibrant throughout the day without frequent touch-ups. The liquid formula glides on easily and dries to a comfortable matte finish, making it ideal for both everyday wear and special occasions. Whether you're heading to the office, meeting friends, or attending an evening event, this lipstick provides the bold, confident look you're after while feeling comfortable on your lips."
 
-Product name: wireless headphones
+Product name: Wireless Noise-Canceling Headphones
 Category: Audio
 Output:
-"Wireless headphones designed for comfortable everyday listening, offering a convenient way to enjoy music, podcasts, calls, and other audio content without wired connections."
+"Premium wireless headphones designed for music lovers and professionals who demand superior audio quality without the hassle of cables. These headphones feature advanced noise-canceling technology that blocks out ambient sounds, allowing you to fully immerse yourself in your music, podcasts, or calls. Perfect for daily commutes, air travel, focused work sessions, or simply relaxing at home with your favorite playlist. The wireless connectivity gives you freedom of movement while the comfortable design ensures you can wear them for extended periods without discomfort. Whether you're working from home, at the gym, or on the go, these headphones adapt seamlessly to your lifestyle."
 
-Product name: running shoes
+Product name: Running Shoes
 Category: Footwear
 Output:
-"A pair of athletic shoes designed for running and active use. They provide a comfortable fit and support for everyday workouts and running sessions."
+"Athletic running shoes engineered for runners who take their training seriously and demand both performance and comfort. These shoes are designed to support your natural running motion while providing essential cushioning to absorb impact with each stride. Ideal for road running, track workouts, or casual jogs through the park, they offer the durability needed to handle regular training schedules. The thoughtful construction helps reduce fatigue during longer runs while maintaining a responsive feel that keeps you connected to the ground. Whether you're training for your first 5K or logging serious weekly mileage, these shoes provide the reliable foundation every runner needs."
 
-Now generate the description for:
+Now generate a detailed, realistic description for:
 ${name}`;
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -677,7 +677,7 @@ ${name}`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 200 }
+          generationConfig: { temperature: 0.5, maxOutputTokens: 350 }
         })
       });
       if (response.ok) {
@@ -702,8 +702,8 @@ ${name}`;
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.4,
-          max_tokens: 200
+          temperature: 0.5,
+          max_tokens: 350
         })
       });
       if (response.ok) {
@@ -740,13 +740,13 @@ function generateLocalDescription(name, category) {
 
   // Beauty & Cosmetics
   if (sub("lipstick") || sub("lip stick")) {
-    return "A cosmetic lip product designed to add color and enhance the appearance of the lips. Suitable for everyday makeup and helping create a polished look.";
+    return "A modern cosmetic lip product designed to add rich color and enhance the appearance of your lips with lasting wear. Perfect for makeup enthusiasts who want vibrant color that stays put throughout the day, this lipstick is suitable for both everyday looks and special occasions. Whether you're creating a professional office look, casual daytime style, or glamorous evening makeup, it helps you achieve a polished, confident appearance with ease.";
   }
   if (sub("lip gloss")) {
-    return "A cosmetic lip product designed to add shine and enhance the appearance of the lips.";
+    return "A cosmetic lip product designed to add shine, dimension, and a touch of color to enhance the natural beauty of your lips. Ideal for creating a fresh, youthful look or adding the perfect finishing touch to any makeup style. The smooth formula glides on comfortably and can be worn alone for a natural look or layered over lipstick for extra shine and dimension.";
   }
   if (sub("foundation")) {
-    return "A facial cosmetic product designed to create an even base for makeup application.";
+    return "A facial cosmetic base product designed to create an even, flawless complexion and provide the perfect canvas for makeup application. This foundation helps minimize the appearance of imperfections while enhancing your natural skin tone. Suitable for daily wear, it works well for various occasions from professional settings to social events, helping you achieve a polished, confident look that lasts throughout the day.";
   }
   if (sub("concealer")) {
     return "A facial cosmetic product designed to cover and conceal specific areas during makeup application.";
@@ -778,13 +778,13 @@ function generateLocalDescription(name, category) {
 
   // Audio Products
   if (sub("wireless headphone") || (sub("headphone") && (sub("wireless") || word("bluetooth")))) {
-    return "Wireless headphones designed for listening to music, podcasts, calls, and other audio content without wired connections.";
+    return "Premium wireless headphones designed for music lovers and professionals seeking high-quality audio without the constraints of cables. These headphones offer the freedom to move while enjoying your favorite music, podcasts, calls, and entertainment content. Perfect for daily commutes, workouts, travel, or focused work sessions, they provide a comfortable listening experience with the convenience of wireless connectivity. Whether you're streaming your playlist, taking important calls, or immersing yourself in a podcast, these headphones adapt seamlessly to your active lifestyle.";
   }
   if (sub("headphone") || sub("headset")) {
-    return "Audio headphones designed for listening to music, podcasts, calls, and other audio content.";
+    return "Quality audio headphones designed for comfortable listening to music, podcasts, calls, and other audio content throughout your day. These headphones deliver clear, balanced sound that brings your entertainment and communication to life. Ideal for work, study, gaming, or leisure, they provide the audio quality and comfort you need for extended listening sessions.";
   }
   if (sub("earbud") || sub("earphone")) {
-    return "Audio earphones designed for personal listening to music, podcasts, and other audio content.";
+    return "Compact audio earphones designed for personal listening on the go, offering a convenient way to enjoy music, podcasts, and calls wherever life takes you. Their portable design makes them perfect for commuting, exercise, travel, or any time you want to enjoy audio content without bulk. The lightweight construction ensures comfortable wear for extended periods while delivering quality sound.";
   }
   if (sub("speaker")) {
     return "An audio speaker designed for playing music and other audio content.";

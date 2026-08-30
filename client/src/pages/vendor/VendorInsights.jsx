@@ -314,14 +314,29 @@ function VendorBenchmarkPanel({ benchmark }) {
 }
 
 // 3. Spacious Sales Performance Graph (Day, Week, Month)
-function SpaciousSalesChart({ data }) {
-  const [timeframe, setTimeframe] = useState("30d"); // "30d", "90d", "year", "month", "week"
+function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeChange }) {
+  const [timeframe, setTimeframe] = useState(externalTimeframe || "30d");
   const [metric, setMetric] = useState("revenue"); // "revenue", "units", "orders", "aov"
   const [hoverIndex, setHoverIndex] = useState(null);
   const svgRef = useRef(null);
 
+  // Sync with external timeframe
+  useEffect(() => {
+    if (externalTimeframe) {
+      setTimeframe(externalTimeframe);
+    }
+  }, [externalTimeframe]);
+
+  const handleTimeframeChange = (newTimeframe) => {
+    setTimeframe(newTimeframe);
+    if (onTimeframeChange) {
+      onTimeframeChange(newTimeframe);
+    }
+  };
+
   const series = useMemo(() => {
     if (!data) return [];
+    // Handle direct data array from reporting API
     if (Array.isArray(data.data) && data.data.length > 0) {
       return data.data.map((item) => ({
         label: item.label || (item.date ? item.date.slice(5) : ""),
@@ -335,10 +350,10 @@ function SpaciousSalesChart({ data }) {
     if (timeframe === "30d") {
       const list = rows(data.revenueByPeriod?.day30 || data.salesByDate?.slice(-30));
       return list.map((item) => ({
-        label: item.date ? item.date.slice(5) : (item.period || ""),
+        label: item.date ? item.date.slice(5) : (item.period || item.label || ""),
         fullDate: item.date || item.period,
         revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || item.units || 0),
+        units: Number(item.purchases || item.units || item.unitsSold || 0),
         orders: Number(item.orders || 0),
         aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
       }));
@@ -346,10 +361,10 @@ function SpaciousSalesChart({ data }) {
     if (timeframe === "90d") {
       const list = rows(data.revenueByPeriod?.day90 || data.salesByDate?.slice(-90));
       return list.map((item) => ({
-        label: item.date ? item.date.slice(5) : (item.period || ""),
+        label: item.date ? item.date.slice(5) : (item.period || item.label || ""),
         fullDate: item.date || item.period,
         revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || item.units || 0),
+        units: Number(item.purchases || item.units || item.unitsSold || 0),
         orders: Number(item.orders || 0),
         aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
       }));
@@ -357,10 +372,10 @@ function SpaciousSalesChart({ data }) {
     if (timeframe === "year") {
       const list = rows(data.salesByDate || data.revenueByPeriod?.year);
       return list.map((item) => ({
-        label: item.date ? item.date.slice(5) : (item.period || ""),
+        label: item.date ? item.date.slice(5) : (item.period || item.label || ""),
         fullDate: item.date || item.period,
         revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || item.units || 0),
+        units: Number(item.purchases || item.units || item.unitsSold || 0),
         orders: Number(item.orders || 0),
         aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
       }));
@@ -368,10 +383,10 @@ function SpaciousSalesChart({ data }) {
     if (timeframe === "month") {
       const list = rows(data.revenueByPeriod?.month);
       return list.map((item) => ({
-        label: item.period || "",
-        fullDate: item.period || "",
+        label: item.period || item.label || "",
+        fullDate: item.period || item.label || "",
         revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || 0),
+        units: Number(item.purchases || item.unitsSold || 0),
         orders: Number(item.orders || 0),
         aov: Number(item.orders ? item.revenue / item.orders : 0)
       }));
@@ -379,10 +394,10 @@ function SpaciousSalesChart({ data }) {
     if (timeframe === "week") {
       const list = rows(data.revenueByPeriod?.week);
       return list.map((item) => ({
-        label: item.period || "",
-        fullDate: item.period || "",
+        label: item.period || item.label || "",
+        fullDate: item.period || item.label || "",
         revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || 0),
+        units: Number(item.purchases || item.unitsSold || 0),
         orders: Number(item.orders || 0),
         aov: Number(item.orders ? item.revenue / item.orders : 0)
       }));
@@ -497,7 +512,7 @@ function SpaciousSalesChart({ data }) {
               key={tf.id}
               type="button"
               onClick={() => {
-                setTimeframe(tf.id);
+                handleTimeframeChange(tf.id);
                 setHoverIndex(null);
               }}
               className="rounded-md px-4 py-1.5 text-xs font-semibold transition-colors"
@@ -1427,7 +1442,11 @@ export default function VendorInsights() {
             title="Sales Performance Over Time"
             description={`Revenue and sales volume trends (${reportingScope === "vendor" ? "Live Vendor Transactions" : "Marketplace Dataset"}) with smooth spline curves and metric toggles.`}
           >
-            <SpaciousSalesChart data={reportingData?.salesOverTime || data.sales} />
+            <SpaciousSalesChart 
+              data={reportingData?.salesOverTime || data.sales} 
+              timeframe={reportingTimeframe}
+              onTimeframeChange={setReportingTimeframe}
+            />
           </Panel>
 
           {/* ========================================================================= */}
