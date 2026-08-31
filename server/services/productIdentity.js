@@ -130,52 +130,62 @@ function generateLocalDescription(name, category = "", extraHints = "") {
   const productName = String(name || "").trim() || "This product";
   const identity = extractProductIdentity(productName, category);
   const descriptions = {
-    wireless_earbuds: "Wireless earbuds for personal listening to music, calls, podcasts, and other audio content.",
-    headphones: "Headphones for personal listening to music, calls, podcasts, and other audio content.",
-    microphone: "A microphone for capturing audio during calls, recording, or other voice input.",
-    speaker: "An audio product for playing music and other sound content.",
-    keyboard: "A keyboard input device for typing and data entry.",
-    mouse: "A computer mouse for cursor navigation and input control.",
-    mouse_pad: "A desk accessory that provides a surface for using a computer mouse.",
-    laptop: "A laptop computer for portable computing tasks.",
-    desktop: "A computer for computing tasks in a stationary workspace.",
-    tablet: "A tablet computing device for digital tasks and media use.",
-    monitor: "A display monitor for visual output from compatible devices.",
-    webcam: "A webcam for video calls and video capture.",
-    router: "A network router for managing and distributing internet connectivity.",
-    charger: "A charging device for powering compatible electronic devices.",
-    power_bank: "A portable power bank for recharging compatible electronic devices.",
-    usb_hub: "A USB hub for expanding available ports for connected devices.",
-    cable: "A cable for connecting compatible electronic devices.",
-    smartwatch: "A smartwatch designed as a wearable device for time display and digital features.",
-    fitness_tracker: "A fitness tracker designed as a wearable device for activity monitoring.",
-    watch: "A watch designed for timekeeping and personal wear.",
-    phone_case: "A phone case for protecting a compatible mobile device.",
-    screen_protector: "A screen protector for helping shield a compatible device display.",
-    smartphone: "A smartphone for communication and mobile digital tasks.",
-    camera: "A camera for capturing photographs and video recordings.",
-    television: "A television for viewing broadcast, streaming, and video content.",
-    printer: "A printer for producing physical copies of digital documents and images.",
-    lipstick: "A cosmetic lip product designed to add color and enhance the appearance of the lips.",
-    lip_gloss: "A cosmetic lip product designed to add shine and color to the lips.",
-    foundation: "A facial cosmetic base product for makeup application.",
-    mascara: "A cosmetic product designed to enhance the appearance of eyelashes.",
-    perfume: "A scented product for personal fragrance use.",
-    shampoo: "A hair-care product for washing and cleansing hair.",
-    running_shoes: "A pair of athletic shoes designed for running and athletic activities.",
-    shoes: "A pair of shoes designed for everyday footwear use.",
-    t_shirt: "A shirt designed for casual and everyday wear.",
-    backpack: "A backpack designed for carrying personal items during daily activities.",
-    water_bottle: "A water bottle designed for storing and carrying drinking water.",
-    mug: "A mug designed for holding and drinking hot or cold beverages.",
-    umbrella: "An umbrella designed for protection from rain or sun.",
-    notebook: "A notebook designed for writing notes and keeping paper records.",
-    yoga_mat: "A yoga mat designed for yoga practice and floor exercises."
+    wireless_earbuds: ["pair of wireless earbuds", "calls, listening, and other personal audio"],
+    headphones: ["pair of headphones", "calls, listening, and other personal audio"],
+    microphone: ["microphone", "voice recording, calls, and audio input"],
+    speaker: ["speaker", "playing music and other audio"],
+    keyboard: ["keyboard", "typing and computer input"],
+    mouse: ["computer mouse", "cursor navigation and computer input"],
+    mouse_pad: ["mouse pad", "providing a dedicated mouse surface"],
+    laptop: ["laptop computer", "portable computing tasks"],
+    desktop: ["desktop computer", "a stationary computing workspace"],
+    tablet: ["tablet", "digital tasks and media use"],
+    monitor: ["monitor", "displaying visual output from compatible devices"],
+    webcam: ["webcam", "video calls and video capture"],
+    router: ["router", "managing internet connectivity for compatible devices"],
+    charger: ["charger", "powering compatible electronic devices"],
+    power_bank: ["portable power bank", "recharging compatible devices away from a power outlet"],
+    usb_hub: ["USB hub", "adding ports for compatible devices"],
+    cable: ["cable", "connecting compatible electronic devices"],
+    smartwatch: ["smartwatch", "wearable timekeeping and digital tasks"],
+    fitness_tracker: ["fitness tracker", "monitoring everyday activity"],
+    watch: ["watch", "timekeeping and everyday wear"],
+    phone_case: ["phone case", "protecting a compatible mobile device"],
+    screen_protector: ["screen protector", "helping protect a compatible device display"],
+    smartphone: ["smartphone", "communication and mobile digital tasks"],
+    camera: ["camera", "capturing photos and video"],
+    television: ["television", "viewing broadcast, streaming, and video content"],
+    printer: ["printer", "producing physical copies of documents and images"],
+    lipstick: ["lip color product", "adding color to the lips"],
+    lip_gloss: ["lip gloss", "adding shine and color to the lips"],
+    foundation: ["foundation makeup product", "creating a base for makeup application"],
+    mascara: ["mascara", "enhancing the appearance of eyelashes"],
+    perfume: ["personal fragrance", "everyday fragrance use"],
+    shampoo: ["shampoo", "cleansing hair"],
+    running_shoes: ["pair of running shoes", "running and other athletic activity"],
+    shoes: ["pair of shoes", "everyday footwear use"],
+    t_shirt: ["casual T-shirt", "everyday wear"],
+    backpack: ["backpack", "carrying personal essentials"],
+    water_bottle: ["water bottle", "storing and carrying drinking water"],
+    mug: ["mug", "holding hot or cold beverages"],
+    umbrella: ["umbrella", "protection from rain or sun"],
+    notebook: ["notebook", "writing notes and keeping paper records"],
+    yoga_mat: ["yoga mat", "yoga practice and floor exercises"]
   };
 
-  const base = descriptions[identity.type] || `A ${String(category || "general").trim().toLowerCase()} product: ${productName}.`;
+  const [productType, typicalUse] = descriptions[identity.type] || ["product", "its intended everyday purpose"];
   const safeHints = String(extraHints || "").trim().replace(/\s+/g, " ");
-  return safeHints ? `${productName} is ${base.charAt(0).toLowerCase()}${base.slice(1)} Vendor notes: ${safeHints}` : `${productName} is ${base.charAt(0).toLowerCase()}${base.slice(1)}`;
+  const hintLine = safeHints
+    ? `Vendor notes: ${safeHints}`
+    : "Review the listing details to confirm the specifications and compatibility you need.";
+
+  // Line breaks give the product form a readable three-line draft while the
+  // catalogue still renders the same content naturally as a paragraph.
+  return [
+    `${productName} is a ${productType} designed for ${typicalUse}.`,
+    `It is a suitable choice when you need a product for this purpose in the ${String(category || "general").trim() || "general"} category.`,
+    hintLine
+  ].join("\n");
 }
 
 module.exports = {

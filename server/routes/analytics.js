@@ -777,7 +777,7 @@ router.get("/reporting/sales-over-time", (req, res) => {
       if (timeframe === "month") {
         salesQuery = `
           SELECT strftime('%Y-%m', sold_at) AS date,
-                 strftime('%m', sold_at) AS label,
+                 strftime('%Y-%m', sold_at) AS label,
                  COALESCE(SUM(amount), 0) AS revenue,
                  COUNT(id) AS orders,
                  COALESCE(SUM(quantity), 0) AS unitsSold,

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, Search, Filter, Package, Grid3x3, List } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Plus, Pencil, Trash2, Search, Package, Grid3x3, List, X } from "lucide-react";
 import api from "../../lib/api";
 import { formatINR } from "../../lib/currency";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import StatusBadge from "../../components/StatusBadge";
+import CatalogProductImage from "../../components/CatalogProductImage";
 
 export default function VendorCatalog() {
   const [products, setProducts] = useState([]);
@@ -14,6 +15,8 @@ export default function VendorCatalog() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
+  const [searchParams] = useSearchParams();
+  const [selectedProductId, setSelectedProductId] = useState(() => searchParams.get("product"));
 
   const load = () => {
     setLoading(true);
@@ -31,6 +34,12 @@ export default function VendorCatalog() {
     setProductToDelete(null);
     window.dispatchEvent(new Event("inventory-updated"));
     load();
+  };
+
+  const openDeleteDialog = (event, product) => {
+    event.stopPropagation();
+    setSelectedProductId(null);
+    setProductToDelete(product);
   };
 
   // Get unique categories
@@ -57,6 +66,8 @@ export default function VendorCatalog() {
     if (stock <= 10) return "low-stock";
     return "in-stock";
   };
+
+  const selectedProduct = products.find((product) => String(product.id) === String(selectedProductId));
 
   return (
     <div className="w-full">
@@ -159,7 +170,8 @@ export default function VendorCatalog() {
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
-                className="group rounded-xl overflow-hidden transition-all hover:shadow-lg"
+                onClick={() => setSelectedProductId((current) => String(current) === String(product.id) ? null : String(product.id))}
+                className="group cursor-pointer rounded-xl overflow-hidden transition-all hover:shadow-lg"
                 style={{ background: "var(--card)", border: "1px solid var(--border)" }}
               >
                 {/* Product Image */}
@@ -170,18 +182,11 @@ export default function VendorCatalog() {
                     aspectRatio: "1",
                   }}
                 >
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package size={48} style={{ color: "var(--border)" }} />
-                    </div>
-                  )}
+                  <CatalogProductImage
+                    src={product.image_url}
+                    alt={product.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
                   
                   {/* Stock Badge */}
                   <div className="absolute top-2 right-2">
@@ -194,6 +199,9 @@ export default function VendorCatalog() {
                   <h3 className="font-semibold text-sm mb-2 line-clamp-2 min-h-[2.5rem]">
                     {product.name}
                   </h3>
+                  <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--ink-soft)" }}>
+                    {product.description || "No description added yet."}
+                  </p>
                   
                   <div className="flex items-center justify-between mb-3">
                     <span className="font-mono-stat font-bold text-lg" style={{ color: "var(--primary)" }}>
@@ -215,13 +223,14 @@ export default function VendorCatalog() {
                   <div className="flex gap-2">
                     <Link
                       to={`/vendor/edit-product/${product.id}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg focus-ring transition-all hover:opacity-80"
                       style={{ background: "var(--primary)", color: "white" }}
                     >
                       <Pencil size={12} /> Edit
                     </Link>
                     <button
-                      onClick={() => setProductToDelete(product)}
+                      onClick={(event) => openDeleteDialog(event, product)}
                       className="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg focus-ring transition-all hover:opacity-80"
                       style={{ color: "var(--danger)", background: "var(--danger-soft)" }}
                     >
@@ -254,13 +263,7 @@ export default function VendorCatalog() {
                           className="w-12 h-12 rounded-lg overflow-hidden shrink-0"
                           style={{ background: "var(--surface)" }}
                         >
-                          {product.image_url ? (
-                            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package size={20} style={{ color: "var(--border)" }} />
-                            </div>
-                          )}
+                          <CatalogProductImage src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                         </div>
                         <div className="min-w-0">
                           <div className="font-semibold">{product.name}</div>
@@ -297,7 +300,7 @@ export default function VendorCatalog() {
                           <Pencil size={12} /> Edit
                         </Link>
                         <button
-                          onClick={() => setProductToDelete(product)}
+                          onClick={(event) => openDeleteDialog(event, product)}
                           className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg focus-ring transition-all hover:opacity-80"
                           style={{ color: "var(--danger)", background: "var(--danger-soft)" }}
                         >
@@ -341,6 +344,43 @@ export default function VendorCatalog() {
               <Plus size={16} /> Add your first product
             </Link>
           )}
+        </div>
+      )}
+
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="product-details-title" onClick={() => setSelectedProductId(null)}>
+          <section className="w-full max-w-3xl overflow-hidden rounded-2xl shadow-2xl" style={{ background: "var(--card)" }} onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b p-4 sm:p-5" style={{ borderColor: "var(--border)" }}>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>Product details</p>
+                <h2 id="product-details-title" className="mt-1 font-display text-xl font-bold">{selectedProduct.name}</h2>
+              </div>
+              <button type="button" onClick={() => setSelectedProductId(null)} aria-label="Close product details" className="rounded-lg p-2 focus-ring" style={{ color: "var(--ink-soft)", background: "var(--surface)" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-4 sm:grid-cols-2 sm:gap-6 sm:p-6">
+              <div className="h-36 overflow-hidden rounded-xl sm:h-auto" style={{ background: "var(--surface)", aspectRatio: "1" }}>
+                <CatalogProductImage src={selectedProduct.image_url} alt={selectedProduct.name} className="h-full w-full object-cover" />
+              </div>
+
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: "var(--primary-light)", color: "white" }}>{selectedProduct.category}</span>
+                  <StatusBadge status={getStockStatus(selectedProduct.stock)} />
+                </div>
+                <p className="mt-3 text-sm leading-5" style={{ color: "var(--ink-soft)" }}>{selectedProduct.description || "No description has been added for this product yet."}</p>
+                <dl className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl p-3" style={{ background: "var(--surface)" }}><dt className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>Price</dt><dd className="mt-1 font-mono-stat text-lg font-bold" style={{ color: "var(--primary)" }}>{formatINR(selectedProduct.price)}</dd></div>
+                  <div className="rounded-xl p-3" style={{ background: "var(--surface)" }}><dt className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>In stock</dt><dd className="mt-1 font-mono-stat text-lg font-bold">{selectedProduct.stock} units</dd></div>
+                </dl>
+                <div className="mt-auto pt-4">
+                  <Link to={`/vendor/edit-product/${selectedProduct.id}`} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}><Pencil size={15} /> Edit product</Link>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 

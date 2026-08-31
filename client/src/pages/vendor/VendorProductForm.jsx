@@ -322,13 +322,16 @@ export default function VendorProductForm() {
               </div>
               <textarea
                 required
-                rows={6}
+                rows={4}
                 value={form.description}
                 onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescError(""); }}
                 placeholder="Describe your product features, benefits, and key details..."
                 className="w-full px-4 py-3 rounded-lg text-sm focus-ring resize-none"
                 style={{ border: "1px solid var(--border)" }}
               />
+              <p className="mt-1 text-xs" style={{ color: "var(--ink-soft)" }}>
+                AI generates a detailed three-line factual description. You can edit it before saving.
+              </p>
               {descError && (
                 <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
                   <AlertCircle size={12} />

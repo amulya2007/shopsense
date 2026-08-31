@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS sales (
   FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS analytics_products (
   product_id TEXT PRIMARY KEY,
   product_name TEXT NOT NULL,
@@ -155,20 +160,66 @@ if (vendorCount === 0) {
       "+1 555 010 2020",
       "44 Market Row, Austin, TX"
     );
-  db.prepare(
-    `INSERT INTO products (vendor_id, name, description, category, price, stock, image_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    info.lastInsertRowid,
-    "Wireless Earbuds Pro",
-    "Noise-cancelling wireless earbuds with 30hr battery life.",
-    "Electronics",
-    59.99,
-    120,
-    ""
-  );
   console.log("Seeded demo vendor -> vendor@demo.com / vendor123");
 }
+
+// Keep the demo account useful on both fresh and existing installations. These
+// are deliberately ordinary customer-facing products: every record owns the
+// same image, description, category, price, and inventory shown in the UI.
+const DEMO_CATALOG_VERSION = "2026-08-polished-catalog-monthly-sales";
+const demoProducts = [
+  ["Nova Smart Watch", "A sleek everyday smartwatch for calls, activity tracking, and timely notifications.", "Electronics", 4999, 34, "/uploads/products/demo-smart-watch.jpg"],
+  ["SoundWave Wireless Headphones", "Comfortable over-ear headphones for focused work, travel, and everyday listening.", "Electronics", 3299, 48, "/uploads/products/demo-wireless-headphones.jpg"],
+  ["Pulse Mini Bluetooth Speaker", "A compact portable speaker that brings clear sound to picnics and small gatherings.", "Electronics", 1899, 0, "/uploads/products/demo-bluetooth-speaker.jpg"],
+  ["Ceramic Coffee Mug Set", "A set of four glazed ceramic mugs for coffee, tea, and relaxed morning routines.", "Home & Kitchen", 899, 26, "/uploads/products/demo-coffee-mugs.jpg"],
+  ["Stainless Steel Water Bottle", "A reusable insulated bottle that keeps refreshments close during work, commutes, and workouts.", "Home & Kitchen", 749, 62, "/uploads/products/demo-water-bottle.jpg"],
+  ["Modern LED Desk Lamp", "A clean, adjustable desk lamp that adds comfortable task lighting to your workspace.", "Home & Kitchen", 1599, 9, "/uploads/products/demo-desk-lamp.jpg"],
+  ["Everyday Laptop Backpack", "A practical backpack with room for a laptop, daily essentials, and short trips.", "Accessories", 2199, 31, "/uploads/products/demo-laptop-backpack.jpg"],
+  ["Men's Cotton Crew T-Shirt", "A soft cotton crew-neck T-shirt designed for easy layering and everyday comfort.", "Fashion", 699, 75, "/uploads/products/demo-cotton-tshirt.jpg"],
+  ["Stride Running Shoes", "Lightweight running shoes with a comfortable fit for walks, runs, and daily movement.", "Fashion", 3499, 18, "/uploads/products/demo-running-shoes.jpg"],
+  ["Classic Polarized Sunglasses", "Timeless sunglasses that add an easy finishing touch to bright-day outfits.", "Accessories", 1299, 0, "/uploads/products/demo-sunglasses.jpg"],
+  ["Daily Glow Skincare Set", "A simple three-step skincare set for a fresh, cared-for everyday routine.", "Beauty", 1499, 22, "/uploads/products/demo-skincare-set.jpg"],
+  ["Ionic Hair Dryer", "A lightweight hair dryer for quick everyday styling at home or while travelling.", "Beauty", 2499, 14, "/uploads/products/demo-hair-dryer.jpg"],
+  ["Flex Yoga Mat", "A supportive yoga mat with a comfortable surface for stretching, yoga, and floor workouts.", "Sports", 1199, 39, "/uploads/products/demo-yoga-mat.jpg"],
+  ["Neoprene Dumbbell Pair", "A versatile pair of dumbbells for home strength sessions and everyday training.", "Sports", 1799, 11, "/uploads/products/demo-dumbbells.jpg"],
+  ["Bamboo Cutting Board", "A smooth bamboo cutting board for everyday prep, serving, and kitchen organization.", "Home & Kitchen", 999, 44, "/uploads/products/demo-cutting-board.jpg"],
+  ["Leather Card Wallet", "A slim leather card wallet that keeps daily cards organized without extra bulk.", "Accessories", 1099, 7, "/uploads/products/demo-card-wallet.jpg"],
+  ["Smart Fitness Band", "A lightweight fitness band for tracking daily activity, workouts, and healthy routines.", "Electronics", 1999, 53, "/uploads/products/demo-fitness-band.jpg"],
+  ["Soft Makeup Brush Set", "A curated makeup brush set for blending, buffing, and creating polished everyday looks.", "Beauty", 899, 16, "/uploads/products/demo-makeup-brushes.jpg"],
+];
+
+function seedPolishedDemoCatalog() {
+  const demoVendor = db.prepare("SELECT id FROM vendors WHERE email = ?").get("vendor@demo.com");
+  const catalogVersion = db.prepare("SELECT setting_value FROM app_settings WHERE setting_key = ?").get("demo_catalog_version");
+  if (!demoVendor || catalogVersion?.setting_value === DEMO_CATALOG_VERSION) return;
+
+  const insertProduct = db.prepare(
+    "INSERT INTO products (vendor_id, name, description, category, price, stock, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  );
+  const insertSale = db.prepare("INSERT INTO sales (vendor_id, product_id, quantity, amount, sold_at) VALUES (?, ?, ?, ?, ?)");
+  const saveVersion = db.prepare("INSERT OR REPLACE INTO app_settings (setting_key, setting_value) VALUES (?, ?)");
+
+  db.transaction(() => {
+    db.prepare("DELETE FROM sales WHERE vendor_id = ?").run(demoVendor.id);
+    db.prepare("DELETE FROM products WHERE vendor_id = ?").run(demoVendor.id);
+    const now = new Date();
+    demoProducts.forEach((product, index) => {
+      const result = insertProduct.run(demoVendor.id, ...product);
+      // Spread sales over the last 12 calendar months so the reporting chart
+      // has meaningful day, week, and month views instead of a single point.
+      for (let monthOffset = 0; monthOffset < 12; monthOffset += 1) {
+        const quantity = 1 + ((index + monthOffset) % 3);
+        const saleDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthOffset, 6 + (index % 20), 12, 0, 0));
+        const soldAt = saleDate.toISOString().replace("T", " ").substring(0, 19);
+        insertSale.run(demoVendor.id, result.lastInsertRowid, quantity, quantity * product[3], soldAt);
+      }
+    });
+    saveVersion.run("demo_catalog_version", DEMO_CATALOG_VERSION);
+  })();
+  console.log(`Seeded ${demoProducts.length} polished demo products`);
+}
+
+seedPolishedDemoCatalog();
 
 // Seed vendor sales and products if none exist
 const salesCount = db.prepare("SELECT COUNT(*) as c FROM sales").get().c;

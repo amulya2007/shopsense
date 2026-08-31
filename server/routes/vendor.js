@@ -6,6 +6,7 @@ const path = require("path");
 const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const ragService = require("../services/ragService");
+const { generateLocalDescription } = require("../services/productIdentity");
 
 const router = express.Router();
 router.use(requireAuth(["vendor"]));
@@ -87,6 +88,23 @@ function lowStockThreshold(value) {
   return Number.isInteger(threshold) && threshold >= 0 && threshold <= 1000000 ? threshold : null;
 }
 
+// Older AI output may contain catalog/prompt language. It is not suitable for
+// customers, so replace only those unmistakable system-style descriptions when
+// returning products to the catalog and product-details modal.
+function isSystemStyleDescription(value) {
+  const text = String(value || "").toLowerCase();
+  return [
+    "shopsense", "this listing", "this item specifically", "should not be confused",
+    "catalog details", "product categories", "product name", "only details that appear",
+    "internal data", "data limitations", "catalog/listing"
+  ].some((phrase) => text.includes(phrase));
+}
+
+function productForDisplay(product) {
+  if (!isSystemStyleDescription(product.description)) return product;
+  return { ...product, description: generateLocalDescription(product.name, product.category) };
+}
+
 router.post("/images", (req, res) => {
   upload.single("image")(req, res, (error) => {
     if (error) {
@@ -163,9 +181,10 @@ router.get("/dashboard", (req, res) => {
 
   const recentProducts = db
     .prepare(
-      `SELECT * FROM products WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 5`
+      `SELECT * FROM products WHERE vendor_id = ? ORDER BY created_at DESC`
     )
-    .all(vendorId);
+    .all(vendorId)
+    .map(productForDisplay);
 
   res.json({
     totalSales: salesRow.totalSales,
@@ -180,7 +199,8 @@ router.get("/dashboard", (req, res) => {
 router.get("/products", (req, res) => {
   const products = db
     .prepare("SELECT * FROM products WHERE vendor_id = ? ORDER BY created_at DESC")
-    .all(req.user.id);
+    .all(req.user.id)
+    .map(productForDisplay);
   res.json(products);
 });
 

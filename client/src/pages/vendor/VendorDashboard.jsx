@@ -5,7 +5,7 @@ import api from "../../lib/api";
 import { formatINR } from "../../lib/currency";
 import { useAuth } from "../../context/auth";
 import StatCard from "../../components/StatCard";
-import ProductImage from "../../components/ProductImage";
+import CatalogProductImage from "../../components/CatalogProductImage";
 
 export default function VendorDashboard() {
   const { user } = useAuth();
@@ -80,9 +80,9 @@ export default function VendorDashboard() {
       <div className="rounded-2xl overflow-hidden" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
           <div>
-            <h2 className="font-display text-lg font-bold">Recent Products</h2>
+            <h2 className="font-display text-lg font-bold">Catalog Products</h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>
-              Your {data?.recentProducts?.length ?? 0} most recently added products
+              All {data?.recentProducts?.length ?? 0} products in your catalog
             </p>
           </div>
           <Link 
@@ -97,10 +97,10 @@ export default function VendorDashboard() {
         {data?.recentProducts?.length ? (
           <div className="p-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {data.recentProducts.slice(0, 8).map((product) => (
+              {data.recentProducts.map((product) => (
                 <Link
                   key={product.id}
-                  to={`/vendor/edit-product/${product.id}`}
+                  to={`/vendor/catalog?product=${product.id}`}
                   className="group rounded-xl overflow-hidden transition-all hover:shadow-lg focus-ring"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
                 >
@@ -112,18 +112,11 @@ export default function VendorDashboard() {
                       aspectRatio: "1",
                     }}
                   >
-                    {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package size={48} style={{ color: "var(--border)" }} />
-                      </div>
-                    )}
+                    <CatalogProductImage
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
                     
                     {/* Stock Badge */}
                     <div className="absolute top-2 right-2">
@@ -150,6 +143,9 @@ export default function VendorDashboard() {
                     <h3 className="font-semibold text-sm mb-1 line-clamp-2 min-h-[2.5rem]">
                       {product.name}
                     </h3>
+                    <p className="mb-2 text-xs leading-relaxed line-clamp-2" style={{ color: "var(--ink-soft)" }}>
+                      {product.description || "No description added yet."}
+                    </p>
                     
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-mono-stat font-bold text-base" style={{ color: "var(--primary)" }}>

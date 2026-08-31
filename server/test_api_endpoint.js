@@ -3,9 +3,10 @@
  * This simulates what the frontend "Generate with AI" button does
  */
 
-const fetch = require('node-fetch');
+// Node 18+ provides fetch globally; keeping this dependency-free makes the
+// endpoint smoke test run with the project's current Node runtime.
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = process.env.API_BASE || 'http://localhost:4000';
 
 const testCases = [
   { name: "Lipstick", category: "Beauty" },

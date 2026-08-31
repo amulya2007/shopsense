@@ -656,29 +656,31 @@ function retrieveRelevantContext(productName, category = "", topK = 4) {
 // Product Description Generator
 // Product name is the source of truth. RAG context is used only when relevant.
 // ---------------------------------------------------------------------------
+function conciseDescription(text) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim().replace(/^['\"]|['\"]$/g, "");
+  if (!clean) return "";
+  const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+  const result = sentences.slice(0, 2).join(" ").trim();
+  return result.length <= 320 ? result : `${result.slice(0, 317).trimEnd()}...`;
+}
+
 async function generateProductDescription(name, category, extraHints = "") {
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
-  const openAiKey = process.env.OPENAI_API_KEY;
   const productName = String(name || "").trim();
   const productCategory = String(category || "").trim();
   const hints = String(extraHints || "").trim();
+
+  // A name and category do not contain enough facts for an LLM to safely infer
+  // specifications. Generate from the recognised name only so a product such
+  // as "Apple Watch" cannot receive category text, platform language, or
+  // made-up features. Vendor notes remain the only optional extra source.
+  return generateLocalDescription(productName, productCategory, hints);
+
+  /*
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
+  const openAiKey = process.env.OPENAI_API_KEY;
   const identity = extractProductIdentity(productName);
 
-  let relevantProducts = [];
-  try {
-    relevantProducts = retrieveRelevantContext(productName, productCategory, 3);
-  } catch (err) {
-    console.warn("[RAG] Description retrieval failed:", err.message);
-  }
-
-  let contextBlock = "No relevant catalog documents were retrieved. Write only from the product name, category, and vendor notes.";
-  if (relevantProducts.length > 0) {
-    contextBlock = relevantProducts.map((p, i) =>
-      `[${i + 1}] Name: ${p.name} | Category: ${p.category} | Origin: ${p.origin} | Description: ${p.description}`
-    ).join("\n");
-  }
-
-  const prompt = `You are writing a professional marketplace product description.
+  const prompt = `Write a concise, factual marketplace product description.
 
 PRIMARY SOURCE OF TRUTH
 Product name: ${productName}
@@ -686,26 +688,15 @@ Category: ${productCategory || "not specified"}
 Vendor notes: ${hints || "none"}
 Identified product type: ${identity.type || "use the product name itself"}
 
-RELEVANT RETRIEVED CONTEXT (already filtered; ignore anything that is not clearly the same product type):
-${contextBlock}
-
-PIPELINE
-1. Understand the product from the name first.
-2. Use retrieved context only when it describes the same kind of product (for example, another keyboard when this listing is a keyboard).
-3. Discard retrieved text about a different item even if the category matches (a wireless mouse must not influence a wireless keyboard).
-4. If retrieved context is missing or weak, write from the product name and category only.
-
 WRITING REQUIREMENTS
-- Write 2 to 3 short paragraphs of natural e-commerce copy (about 120–220 words).
-- Paragraph 1: what this exact product is, using the product name.
-- Paragraph 2: who it is for and how it is typically used, based only on the name/type.
-- Paragraph 3 (optional): buying context, category fit, and any vendor notes — still no invented specs.
-- Sound like a careful human copywriter, not a template of "perfect for everyday use" filler.
-- Do not repeat the same sentence in different words.
+- Write exactly 1 or 2 short sentences, 25–55 words total.
+- State only what the product is and its ordinary use.
+- Include vendor notes only when supplied.
+- Do not use marketing filler, assumptions, or repeated ideas.
+- Never mention ShopSense, a marketplace, AI, catalog retrieval, or the platform.
 
 ACCURACY — DO NOT INVENT
-Do not add specifications, dimensions, materials, colors, ingredients, certifications, warranty, performance numbers, compatibility lists, brand claims, or technical features unless they already appear in the product name, vendor notes, or a retrieved description for the SAME product type.
-If a detail is unknown, omit it. Do not pad with empty praise.
+Do not add specifications, dimensions, materials, colors, ingredients, certifications, warranty, performance numbers, compatibility, brand claims, or technical features unless they appear in the product name or vendor notes. If a detail is unknown, omit it.
 
 Return ONLY the description text.`;
 
@@ -717,13 +708,14 @@ Return ONLY the description text.`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.45, maxOutputTokens: 700 }
+          generationConfig: { temperature: 0.2, maxOutputTokens: 120 }
         })
       });
       if (response.ok) {
         const result = await response.json();
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text && text.trim().length > 40) return text.trim().replace(/^["']|["']$/g, "");
+        const description = conciseDescription(text);
+        if (description.length > 20) return description;
       }
     } catch (err) {
       console.warn("[RAG] Gemini description generation failed:", err.message);
@@ -741,14 +733,15 @@ Return ONLY the description text.`;
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.45,
-          max_tokens: 700
+          temperature: 0.2,
+          max_tokens: 120
         })
       });
       if (response.ok) {
         const result = await response.json();
         const text = result.choices?.[0]?.message?.content;
-        if (text && text.trim().length > 40) return text.trim().replace(/^["']|["']$/g, "");
+        const description = conciseDescription(text);
+        if (description.length > 20) return description;
       }
     } catch (err) {
       console.warn("[RAG] OpenAI description generation failed:", err.message);
@@ -756,6 +749,7 @@ Return ONLY the description text.`;
   }
 
   return generateLocalDescription(productName, productCategory, hints);
+  */
 }
 
 async function answerShoppingQuestion(question, conversationHistory = []) {
