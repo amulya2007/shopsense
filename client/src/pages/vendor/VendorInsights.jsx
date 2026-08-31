@@ -338,39 +338,33 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
     if (!data) return [];
     const fromReportingApi = Array.isArray(data.data);
     if (fromReportingApi) {
-      return data.data.map((item) => ({
-        label: item.label || item.period || (item.date ? String(item.date).slice(5) : ""),
-        fullDate: item.label || item.period || item.date || "",
-        revenue: Number(item.revenue || 0),
-        units: Number(item.unitsSold || item.units || item.purchases || 0),
-        orders: Number(item.orders || 0),
-        aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
-      }));
+      return data.data.map((item) => {
+        // Format labels based on timeframe
+        let displayLabel = item.label || "";
+        if (timeframe === "month" && /^\d{4}-\d{2}$/.test(item.date)) {
+          // Format YYYY-MM as "Sep '25"
+          const [year, month] = item.date.split("-");
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          displayLabel = `${monthNames[parseInt(month) - 1]} '${year.slice(2)}`;
+        } else if (timeframe === "30d" && /^\d{1,2}:\d{2}$/.test(item.label)) {
+          // Format hour labels like "9:00", "12:00", "15:00"
+          const hour = parseInt(item.label.split(':')[0]);
+          displayLabel = `${hour}:00`;
+        }
+        
+        return {
+          label: displayLabel,
+          fullDate: item.date || item.label || "",
+          revenue: Number(item.revenue || 0),
+          units: Number(item.unitsSold || item.units || item.purchases || 0),
+          orders: Number(item.orders || 0),
+          aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
+        };
+      });
     }
+    // Fallback to old data structure if not from reporting API
     if (timeframe === "30d") {
       const list = rows(data.revenueByPeriod?.day30 || data.salesByDate?.slice(-30));
-      return list.map((item) => ({
-        label: item.date ? item.date.slice(5) : (item.period || item.label || ""),
-        fullDate: item.date || item.period,
-        revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || item.units || item.unitsSold || 0),
-        orders: Number(item.orders || 0),
-        aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
-      }));
-    }
-    if (timeframe === "90d") {
-      const list = rows(data.revenueByPeriod?.day90 || data.salesByDate?.slice(-90));
-      return list.map((item) => ({
-        label: item.date ? item.date.slice(5) : (item.period || item.label || ""),
-        fullDate: item.date || item.period,
-        revenue: Number(item.revenue || 0),
-        units: Number(item.purchases || item.units || item.unitsSold || 0),
-        orders: Number(item.orders || 0),
-        aov: Number(item.aov || (item.orders ? item.revenue / item.orders : 0))
-      }));
-    }
-    if (timeframe === "year") {
-      const list = rows(data.salesByDate || data.revenueByPeriod?.year);
       return list.map((item) => ({
         label: item.date ? item.date.slice(5) : (item.period || item.label || ""),
         fullDate: item.date || item.period,
@@ -405,34 +399,69 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
     return [];
   }, [data, timeframe]);
 
-  if (!series.length) return <Empty message="No sales trend data available." />;
+  if (!series.length) return <Empty message="No recorded sales for this period." />;
 
   const metricConfig = {
-    revenue: { label: "Revenue (₹)", format: (v) => formatINR(v), shortFormat: (v) => `₹${(v / 1000).toFixed(0)}k`, color: "#0E4B44" },
-    units: { label: "Units Sold", format: (v) => `${number(v)} units`, shortFormat: (v) => number(v), color: "#D97706" },
-    orders: { label: "Total Orders", format: (v) => `${number(v)} orders`, shortFormat: (v) => number(v), color: "#2563EB" },
-    aov: { label: "Avg Order Value", format: (v) => formatINR(v), shortFormat: (v) => `₹${Math.round(v)}`, color: "#7C3AED" }
+    revenue: { 
+      label: "Revenue (₹)", 
+      format: (v) => formatINR(v), 
+      shortFormat: (v) => {
+        const val = Number(v);
+        if (val === 0) return "₹0";
+        if (val < 1000) return `₹${Math.round(val)}`;
+        if (val < 100000) return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+        return `₹${(val / 100000).toFixed(val % 100000 === 0 ? 0 : 1)}L`;
+      }, 
+      color: "#0E4B44" 
+    },
+    units: { 
+      label: "Units Sold", 
+      format: (v) => `${number(v)} units`, 
+      shortFormat: (v) => number(v), 
+      color: "#D97706" 
+    },
+    orders: { 
+      label: "Sales", 
+      format: (v) => `${number(v)} sales`, 
+      shortFormat: (v) => number(v), 
+      color: "#2563EB" 
+    },
+    aov: { 
+      label: "Avg Sale Value", 
+      format: (v) => formatINR(v), 
+      shortFormat: (v) => {
+        const val = Number(v);
+        if (val === 0) return "₹0";
+        if (val < 1000) return `₹${Math.round(val)}`;
+        if (val < 100000) return `₹${(val / 1000).toFixed(0)}k`;
+        return `₹${(val / 100000).toFixed(1)}L`;
+      }, 
+      color: "#7C3AED" 
+    }
   };
   const activeCfg = metricConfig[metric];
 
   const values = series.map((s) => s[metric]);
-  const maxValue = Math.max(1, ...values);
+  const maxValue = Math.max(...values, 0);
+  const minValue = Math.min(...values, 0);
+  // Add 10% padding to the top for better visual spacing
+  const chartMax = maxValue > 0 ? maxValue * 1.1 : 1;
   const totalValue = values.reduce((a, b) => a + b, 0);
   const avgValue = totalValue / Math.max(1, values.length);
   const peakIndex = values.indexOf(maxValue);
 
   const width = 940;
-  const height = 300;
-  const padLeft = 60;
+  const height = 280;
+  const padLeft = 70;
   const padRight = 24;
   const padTop = 24;
-  const padBottom = 44;
+  const padBottom = 48;
   const chartW = width - padLeft - padRight;
   const chartH = height - padTop - padBottom;
 
   const points = series.map((s, idx) => {
     const x = padLeft + (series.length === 1 ? chartW / 2 : (idx * chartW) / (series.length - 1));
-    const y = padTop + chartH - (s[metric] / maxValue) * chartH;
+    const y = padTop + chartH - (s[metric] / chartMax) * chartH;
     return { x, y, data: s };
   });
 
@@ -460,15 +489,38 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
   };
 
   const getAxisTicks = () => {
-    if (series.length <= 12) {
+    // For day view (hourly), show key hours if many points
+    if (timeframe === "30d" && series.length > 12) {
+      // Show every 2-3 hours for readability
+      const step = Math.ceil(series.length / 8);
+      const ticks = [];
+      for (let i = 0; i < points.length; i += step) {
+        ticks.push({ x: points[i].x, label: points[i].data.label });
+      }
+      if (ticks.length > 0 && ticks[ticks.length - 1].x !== points[points.length - 1].x) {
+        ticks.push({ x: points[points.length - 1].x, label: points[points.length - 1].data.label });
+      }
+      return ticks;
+    }
+    // For week view (7 days), show all labels
+    if (timeframe === "week" && series.length === 7) {
       return points.map((p) => ({ x: p.x, label: p.data.label }));
     }
-    const step = Math.max(1, Math.floor(points.length / 6));
+    // For month view, show all months if <= 12
+    if (timeframe === "month" && series.length <= 12) {
+      return points.map((p) => ({ x: p.x, label: p.data.label }));
+    }
+    // For other views, show up to 8 evenly spaced labels
+    if (series.length <= 8) {
+      return points.map((p) => ({ x: p.x, label: p.data.label }));
+    }
+    const step = Math.max(1, Math.floor(series.length / 7));
     const ticks = [];
     for (let i = 0; i < points.length; i += step) {
       ticks.push({ x: points[i].x, label: points[i].data.label });
     }
-    if (ticks[ticks.length - 1].x !== points[points.length - 1].x) {
+    // Always include the last point
+    if (ticks.length > 0 && ticks[ticks.length - 1].x !== points[points.length - 1].x) {
       ticks.push({ x: points[points.length - 1].x, label: points[points.length - 1].data.label });
     }
     return ticks;
@@ -584,10 +636,10 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
             </filter>
           </defs>
 
-          {/* Dotted Grid lines */}
+          {/* Y-axis Grid lines with better scaling */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const y = padTop + chartH * ratio;
-            const val = maxValue * (1 - ratio);
+            const val = chartMax * (1 - ratio);
             return (
               <g key={ratio}>
                 <line
@@ -599,7 +651,7 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
                   strokeDasharray={ratio > 0 && ratio < 1 ? "4 4" : ""}
                   strokeOpacity="0.8"
                 />
-                <text x={padLeft - 8} y={y + 4} textAnchor="end" fontSize="10" fill="var(--ink-soft)" fontFamily="monospace">
+                <text x={padLeft - 8} y={y + 4} textAnchor="end" fontSize="11" fill="var(--ink-soft)" fontFamily="monospace">
                   {activeCfg.shortFormat(val)}
                 </text>
               </g>
@@ -1430,7 +1482,7 @@ export default function VendorInsights() {
             icon={BarChart3}
             eyebrow={`Sales & Reporting · ${reportingScope === "vendor" ? "Vendor Live Sales" : "Marketplace Dataset"}`}
             title="Sales Performance Over Time"
-            description={`Revenue and unit volume grouped by the selected calendar period (${reportingScope === "vendor" ? "your sales" : "marketplace orders"}). Day shows the latest recorded sales days, Week uses Monday–Sunday calendar weeks, and Month uses calendar months.`}
+            description={`Revenue and unit volume grouped by the selected period. Day shows hourly breakdown (aggregated across all sales), Week shows the 7-day breakdown (Monday–Sunday), and Month shows monthly performance chronologically.`}
           >
             <SpaciousSalesChart 
               data={reportingData?.salesOverTime || data.sales} 

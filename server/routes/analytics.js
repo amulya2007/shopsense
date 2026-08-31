@@ -775,6 +775,7 @@ router.get("/reporting/sales-over-time", (req, res) => {
     if (scope === "vendor") {
       let salesQuery = "";
       if (timeframe === "month") {
+        // Aggregate by calendar month - returns all months chronologically
         salesQuery = `
           SELECT strftime('%Y-%m', sold_at) AS date,
                  strftime('%Y-%m', sold_at) AS label,
@@ -788,34 +789,56 @@ router.get("/reporting/sales-over-time", (req, res) => {
           ORDER BY strftime('%Y-%m', sold_at) ASC
         `;
       } else if (timeframe === "week") {
+        // Get 7 days (Monday to Sunday) of aggregated data
+        // Uses a calendar-based approach to ensure all 7 days are represented
         salesQuery = `
-          SELECT date(sold_at, '-' || ((CAST(strftime('%w', sold_at) AS INTEGER) + 6) % 7) || ' days') AS date,
-                 date(sold_at, '-' || ((CAST(strftime('%w', sold_at) AS INTEGER) + 6) % 7) || ' days') AS label,
-                 COALESCE(SUM(amount), 0) AS revenue,
-                 COUNT(id) AS orders,
-                 COALESCE(SUM(quantity), 0) AS unitsSold,
-                 ROUND(COALESCE(AVG(amount), 0), 2) AS aov
-          FROM sales
-          WHERE vendor_id = ?
-          GROUP BY date(sold_at, '-' || ((CAST(strftime('%w', sold_at) AS INTEGER) + 6) % 7) || ' days')
-          ORDER BY date ASC
+          WITH days AS (
+            SELECT 0 AS day_offset, 'Monday' AS day_name
+            UNION SELECT 1, 'Tuesday'
+            UNION SELECT 2, 'Wednesday'
+            UNION SELECT 3, 'Thursday'
+            UNION SELECT 4, 'Friday'
+            UNION SELECT 5, 'Saturday'
+            UNION SELECT 6, 'Sunday'
+          )
+          SELECT 
+            days.day_name AS label,
+            days.day_offset AS date,
+            COALESCE(SUM(s.amount), 0) AS revenue,
+            COALESCE(COUNT(s.id), 0) AS orders,
+            COALESCE(SUM(s.quantity), 0) AS unitsSold,
+            ROUND(COALESCE(AVG(s.amount), 0), 2) AS aov
+          FROM days
+          LEFT JOIN sales s ON 
+            s.vendor_id = ? AND
+            ((CAST(strftime('%w', s.sold_at) AS INTEGER) + 6) % 7) = days.day_offset
+          GROUP BY days.day_offset, days.day_name
+          ORDER BY days.day_offset ASC
         `;
       } else {
-        const dayLimit = timeframe === "90d" ? 90 : timeframe === "year" ? 365 : 30;
+        // Day view - show hourly aggregation across all sales to reveal hourly patterns
         salesQuery = `
-          SELECT * FROM (
-            SELECT date(sold_at) AS date,
-                   strftime('%m-%d', sold_at) AS label,
-                   COALESCE(SUM(amount), 0) AS revenue,
-                   COUNT(id) AS orders,
-                   COALESCE(SUM(quantity), 0) AS unitsSold,
-                   ROUND(COALESCE(AVG(amount), 0), 2) AS aov
-            FROM sales
-            WHERE vendor_id = ?
-            GROUP BY date(sold_at)
-            ORDER BY date(sold_at) DESC
-            LIMIT ${dayLimit}
-          ) ORDER BY date ASC
+          WITH hours AS (
+            SELECT 0 AS hour UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 
+            UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 
+            UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 
+            UNION SELECT 12 UNION SELECT 13 UNION SELECT 14 UNION SELECT 15 
+            UNION SELECT 16 UNION SELECT 17 UNION SELECT 18 UNION SELECT 19 
+            UNION SELECT 20 UNION SELECT 21 UNION SELECT 22 UNION SELECT 23
+          )
+          SELECT 
+            hours.hour AS hour,
+            printf('%02d:00', hours.hour) AS label,
+            COALESCE(SUM(s.amount), 0) AS revenue,
+            COALESCE(COUNT(s.id), 0) AS orders,
+            COALESCE(SUM(s.quantity), 0) AS unitsSold,
+            ROUND(COALESCE(AVG(s.amount), 0), 2) AS aov
+          FROM hours
+          LEFT JOIN sales s ON 
+            s.vendor_id = ? AND
+            CAST(strftime('%H', s.sold_at) AS INTEGER) = hours.hour
+          GROUP BY hours.hour
+          ORDER BY hours.hour ASC
         `;
       }
 
