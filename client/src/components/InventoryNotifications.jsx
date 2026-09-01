@@ -112,13 +112,30 @@ export default function InventoryNotifications() {
 
       {open && <div className="absolute right-0 top-12 z-30 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl shadow-xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div><p className="text-sm font-bold">Inventory alerts</p><p className="text-[11px]" style={{ color: "var(--ink-soft)" }}>{outOfStock ? `${outOfStock} out of stock` : "Stock levels are healthy"}</p></div>
+          <div>
+            <p className="text-sm font-bold">Inventory Alerts</p>
+            <p className="text-[11px]" style={{ color: "var(--ink-soft)" }}>
+              {outOfStock > 0 && `${outOfStock} out of stock`}
+              {outOfStock > 0 && alerts.length - outOfStock > 0 && " • "}
+              {alerts.length - outOfStock > 0 && `${alerts.length - outOfStock} low stock`}
+              {alerts.length === 0 && "Stock levels are healthy"}
+            </p>
+          </div>
           <button type="button" className="text-xs font-semibold focus-ring" style={{ color: "var(--primary)" }} onClick={openInsights}>View insights</button>
         </div>
         {alerts.length ? <div className="max-h-80 overflow-y-auto">
           {alerts.map((alert) => <button type="button" className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-black/[0.02] focus-ring" style={{ borderBottom: "1px solid var(--border)" }} key={alert.productId} onClick={() => openRestock(alert)}>
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: alert.status === "out_of_stock" ? "var(--danger-soft)" : "var(--accent-soft)", color: alert.status === "out_of_stock" ? "var(--danger)" : "#7a5719" }}><PackageX size={16} /></div>
-            <div className="min-w-0"><p className="truncate text-sm font-semibold">{alert.productName}</p><p className="mt-0.5 text-xs" style={{ color: "var(--ink-soft)" }}>{alert.status === "out_of_stock" ? "Out of stock — update stock" : `${alert.stock} left — update stock`}</p></div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{alert.productName}</p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--ink-soft)" }}>
+                {alert.status === "out_of_stock" ? (
+                  <span className="font-semibold" style={{ color: "var(--danger)" }}>Out of stock — restock now</span>
+                ) : (
+                  <span className="font-semibold" style={{ color: "#7a5719" }}>Low stock: {alert.stock} remaining</span>
+                )}
+              </p>
+            </div>
           </button>)}
         </div> : <div className="px-4 py-7 text-center"><Bell size={20} className="mx-auto mb-2" style={{ color: "var(--success)" }} /><p className="text-sm font-medium">No inventory alerts</p><p className="mt-1 text-xs" style={{ color: "var(--ink-soft)" }}>All current products are above the low-stock threshold.</p></div>}
       </div>}

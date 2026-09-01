@@ -275,11 +275,21 @@ router.get("/inventory/alerts", (req, res) => {
   `).all(req.user.id, lowThreshold).map((product) => ({
     ...product,
     lowStockThreshold: lowThreshold,
-    status: stockStatus(product.stock, lowThreshold),
-    message: product.stock <= 0 ? `${product.productName} is out of stock.` : `${product.productName} is low in stock.`,
+    status: product.stock <= 0 ? "out_of_stock" : "low_stock",
+    message: product.stock <= 0 ? `${product.productName} is out of stock.` : `${product.productName} is low in stock (${product.stock} remaining).`,
   }));
 
-  res.json({ lowStockThreshold: lowThreshold, alertCount: alerts.length, alerts });
+  // Separate counts for better clarity
+  const outOfStock = alerts.filter(a => a.status === "out_of_stock").length;
+  const lowStock = alerts.filter(a => a.status === "low_stock").length;
+
+  res.json({ 
+    lowStockThreshold: lowThreshold, 
+    alertCount: alerts.length,
+    outOfStockCount: outOfStock,
+    lowStockCount: lowStock,
+    alerts 
+  });
 });
 
 // Add product
