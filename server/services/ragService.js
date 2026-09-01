@@ -684,7 +684,6 @@ async function generateProductDescription(name, category, extraHints = "") {
   // as "Apple Watch" cannot receive category text, platform language, or
   // made-up features. Vendor notes remain the only optional extra source.
   return generateLocalDescription(productName, productCategory, hints);
-
   /*
   const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
   const openAiKey = process.env.OPENAI_API_KEY;
@@ -697,7 +696,6 @@ Product name: ${productName}
 Category: ${productCategory || "not specified"}
 Vendor notes: ${hints || "none"}
 Identified product type: ${identity.type || "use the product name itself"}
-
 WRITING REQUIREMENTS
 - Write exactly 1 or 2 short sentences, 25–55 words total.
 - State only what the product is and its ordinary use.
@@ -768,7 +766,6 @@ async function answerShoppingQuestion(question, conversationHistory = []) {
   }
 
   const trimmedQuery = question.trim();
-
   // Build lightweight context from prior conversation
   const convContext = buildConversationContext(conversationHistory);
 
@@ -796,7 +793,6 @@ async function answerShoppingQuestion(question, conversationHistory = []) {
 // Initialise on startup
 // ---------------------------------------------------------------------------
 buildVectorStore();
-
 module.exports = {
   answerShoppingQuestion,
   retrieveProducts,
