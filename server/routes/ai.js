@@ -82,9 +82,23 @@ router.post("/shopping-assistant", async (req, res) => {
 
     const result = await ragService.answerShoppingQuestion(question, history);
 
+    // Prioritize live catalog products for better user experience
+    // Live catalog products are clickable and show in vendor's catalog
+    const liveProducts = result.products.filter(p => p.origin === "live_catalog");
+    const datasetProducts = result.products.filter(p => p.origin === "historical_dataset");
+    
+    // If we have live products, show them first (up to 4), then fill with dataset products
+    let prioritizedProducts = [];
+    if (liveProducts.length > 0) {
+      prioritizedProducts = [...liveProducts.slice(0, 4), ...datasetProducts.slice(0, Math.max(0, 6 - liveProducts.length))];
+    } else {
+      // No live products found, show dataset products
+      prioritizedProducts = datasetProducts.slice(0, 6);
+    }
+
     res.json({
       answer:   result.answer,
-      products: result.products,
+      products: prioritizedProducts,
       sources:  result.sources
     });
   } catch (error) {
@@ -120,16 +134,20 @@ router.get("/status", (req, res) => {
 /**
  * POST /api/ai/refresh-index
  * Rebuild the vector store from the SQLite database on demand.
+ * PUBLIC endpoint - no auth required for development convenience
  */
 router.post("/refresh-index", (req, res) => {
   try {
+    console.log("🔄 Manually refreshing RAG vector store...");
     const count = ragService.buildVectorStore();
+    console.log(`✅ Vector store refreshed: ${count} products indexed`);
     res.json({
       success:        true,
       message:        `Vector store index successfully refreshed with ${count} products.`,
       indexedProducts: count
     });
   } catch (error) {
+    console.error("❌ RAG refresh error:", error);
     res.status(500).json({
       error: "Failed to refresh vector index: " + error.message
     });

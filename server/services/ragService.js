@@ -230,6 +230,8 @@ function buildVectorStore() {
       LEFT JOIN vendors v ON p.vendor_id = v.id
     `).all();
 
+    console.log(`[RAG] Indexing ${liveProducts.length} live catalog products...`);
+
     liveProducts.forEach((p) => {
       const identity = extractProductIdentity(p.name);
       const textContent = `${p.name} ${p.name} ${identity.type || ""} ${p.description || ""} Category: ${p.category} Vendor: ${p.vendor_name || "Verified Vendor"} Price: ₹${p.price} Stock: ${p.stock} units`;
@@ -248,6 +250,14 @@ function buildVectorStore() {
         vector
       });
     });
+    
+    if (liveProducts.length > 0) {
+      console.log(`[RAG] Sample live products:`, liveProducts.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        category: p.category
+      })));
+    }
   } catch (err) {
     console.error("[RAG] Error reading live products:", err);
   }

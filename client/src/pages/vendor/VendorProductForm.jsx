@@ -472,10 +472,10 @@ export default function VendorProductForm() {
                 Or paste an image URL
               </label>
               <input
-                type="url"
+                type="text"
                 value={form.imageUrl.startsWith("data:") ? "" : form.imageUrl}
                 onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                placeholder="https://example.com/product-image.jpg"
+                placeholder="https://example.com/product-image.jpg or /uploads/image.jpg"
                 className="w-full px-4 py-2.5 rounded-lg text-sm focus-ring"
                 style={{ border: "1px solid var(--border)" }}
               />

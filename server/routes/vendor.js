@@ -55,10 +55,18 @@ function getPagePreviewUrl(html, pageUrl) {
 function normalizeImageUrl(value) {
   const imageUrl = String(value || "").trim();
   if (!imageUrl) return "";
+  
+  // Allow relative paths (like /uploads/products/image.jpg)
+  if (imageUrl.startsWith('/')) {
+    return imageUrl; // Valid relative path
+  }
+  
+  // Allow base64 data URIs
   if (/^data:image\/(?:jpeg|jpg|png|webp|gif);base64,[a-z0-9+/=]+$/i.test(imageUrl)) {
     return imageUrl.length <= 300000 ? imageUrl : null;
   }
 
+  // Validate full URLs
   let parsed;
   try {
     parsed = new URL(imageUrl);
@@ -328,13 +336,24 @@ router.put("/products/:id", (req, res) => {
   if (!product) return res.status(404).json({ error: "Product not found" });
 
   const { name, description, category, price, stock, imageUrl } = req.body;
-  const normalizedImageUrl = imageUrl === undefined ? product.image_url : normalizeImageUrl(imageUrl);
-  if (normalizedImageUrl === null) {
-    return res.status(400).json({ error: "Use a direct http(s) image URL, not a Google Search link." });
+  
+  // Handle image URL: if undefined, keep existing; if empty string, keep existing; if invalid, keep existing
+  let normalizedImageUrl = product.image_url; // Default to existing image
+  
+  if (imageUrl !== undefined && imageUrl !== null && String(imageUrl).trim() !== "") {
+    // Only try to normalize if a non-empty value was provided
+    const normalized = normalizeImageUrl(imageUrl);
+    if (normalized === null) {
+      // Invalid URL provided - return error
+      return res.status(400).json({ error: "Use a direct http(s) image URL, not a Google Search link." });
+    }
+    normalizedImageUrl = normalized;
   }
+  
   if (stock !== undefined && !validStock(stock)) {
     return res.status(400).json({ error: "Stock must be a non-negative whole number" });
   }
+  
   db.prepare(
     `UPDATE products SET name=?, description=?, category=?, price=?, stock=?, image_url=? WHERE id=?`
   ).run(

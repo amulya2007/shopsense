@@ -28,6 +28,12 @@ export default function VendorCatalog() {
 
   useEffect(load, []);
 
+  // Update selected product when URL changes
+  useEffect(() => {
+    const productId = searchParams.get("product");
+    setSelectedProductId(productId);
+  }, [searchParams]);
+
   const handleDelete = async () => {
     if (!productToDelete) return;
     await api.delete(`/vendor/products/${productToDelete.id}`);
@@ -68,6 +74,15 @@ export default function VendorCatalog() {
   };
 
   const selectedProduct = products.find((product) => String(product.id) === String(selectedProductId));
+
+  // Handle case where product modal is open but product not found (e.g., dataset product)
+  useEffect(() => {
+    if (selectedProductId && !loading && products.length > 0 && !selectedProduct) {
+      console.warn(`Product ${selectedProductId} not found in catalog`);
+      // Close the modal since product doesn't exist in vendor's catalog
+      setSelectedProductId(null);
+    }
+  }, [selectedProductId, loading, products, selectedProduct]);
 
   return (
     <div className="w-full">

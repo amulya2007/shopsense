@@ -257,6 +257,7 @@ router.get("/inventory", (req, res) => {
   const category = String(req.query.category || "").trim();
   const search = String(req.query.search || "").trim().toLowerCase();
 
+  // Get vendor's actual catalog products
   const catalogProducts = db.prepare(`
     SELECT id AS product_id, name AS product_name, category, price, stock, 'catalog' AS origin
     FROM products
@@ -264,10 +265,30 @@ router.get("/inventory", (req, res) => {
     ORDER BY stock ASC, name ASC
   `).all(req.user.id);
 
+  // Get accurate total count for vendor's catalog
+  const actualCatalogCount = catalogProducts.length;
+
   let products = [];
+  let actualTotalCount = 0; // This will be the accurate total
+  
   if (scope === "catalog") {
     products = catalogProducts;
+    actualTotalCount = catalogProducts.length;
   } else if (scope === "dataset") {
+    // For dataset scope, get the ACTUAL total count before filtering
+    let countQuery = "SELECT COUNT(*) AS total FROM analytics_products WHERE 1=1";
+    const countParams = [];
+    if (category) {
+      countQuery += " AND lower(category) = lower(?)";
+      countParams.push(category);
+    }
+    if (search) {
+      countQuery += " AND (lower(product_name) LIKE ? OR lower(product_id) LIKE ?)";
+      countParams.push(`%${search}%`, `%${search}%`);
+    }
+    actualTotalCount = db.prepare(countQuery).get(...countParams).total;
+    
+    // Get products for display (limited)
     let query = "SELECT product_id, product_name, category, price, stock, 'dataset' AS origin FROM analytics_products WHERE 1=1";
     const params = [];
     if (category) {
@@ -281,9 +302,20 @@ router.get("/inventory", (req, res) => {
     query += " ORDER BY stock ASC, product_name ASC LIMIT 100";
     products = db.prepare(query).all(...params);
   } else {
+    // "all" scope - prioritize catalog if exists
     if (catalogProducts.length > 0) {
       products = catalogProducts;
+      actualTotalCount = catalogProducts.length;
     } else {
+      // Fallback to dataset sample
+      let countQuery = "SELECT COUNT(*) AS total FROM analytics_products WHERE 1=1";
+      const countParams = [];
+      if (category) {
+        countQuery += " AND lower(category) = lower(?)";
+        countParams.push(category);
+      }
+      actualTotalCount = db.prepare(countQuery).get(...countParams).total;
+      
       let query = "SELECT product_id, product_name, category, price, stock, 'dataset' AS origin FROM analytics_products WHERE 1=1";
       const params = [];
       if (category) {
@@ -297,26 +329,40 @@ router.get("/inventory", (req, res) => {
 
   const enrichedProducts = products.map((product) => ({
     ...product,
-    status: product.stock <= 0 ? "out_of_stock" : product.stock <= lowThreshold ? "low_stock" : product.stock <= mediumThreshold ? "medium_stock" : "healthy_stock",
+    status: product.stock <= 0 ? "out_of_stock" : product.stock <= lowThreshold ? "low_stock" : "healthy_stock",
   }));
 
-  const counts = enrichedProducts.reduce((summary, product) => {
-    summary[product.status] = (summary[product.status] || 0) + 1;
-    summary.totalStock += product.stock;
-    return summary;
-  }, { out_of_stock: 0, low_stock: 0, medium_stock: 0, healthy_stock: 0, totalStock: 0 });
+  // Calculate status counts from the ACTUAL catalog, not limited/filtered products
+  let statusCounts = { out_of_stock: 0, low_stock: 0, healthy_stock: 0, totalStock: 0 };
+  
+  if (scope === "catalog" || (scope === "all" && catalogProducts.length > 0)) {
+    // For catalog scope, count ALL catalog products accurately
+    statusCounts = catalogProducts.reduce((summary, product) => {
+      const status = product.stock <= 0 ? "out_of_stock" : product.stock <= lowThreshold ? "low_stock" : "healthy_stock";
+      summary[status] = (summary[status] || 0) + 1;
+      summary.totalStock += product.stock;
+      return summary;
+    }, { out_of_stock: 0, low_stock: 0, healthy_stock: 0, totalStock: 0 });
+  } else {
+    // For dataset scope, use the enriched products (they're already limited)
+    statusCounts = enrichedProducts.reduce((summary, product) => {
+      summary[product.status] = (summary[product.status] || 0) + 1;
+      summary.totalStock += product.stock;
+      return summary;
+    }, { out_of_stock: 0, low_stock: 0, healthy_stock: 0, totalStock: 0 });
+  }
 
   res.json({
     dataSource: scope === "catalog" ? "live_catalog" : (scope === "dataset" ? "historical_dataset" : (catalogProducts.length ? "live_catalog" : "historical_sample")),
     thresholds: { lowThreshold, mediumThreshold },
     summary: {
-      totalProducts: enrichedProducts.length,
-      totalStock: counts.totalStock,
-      outOfStock: counts.out_of_stock || 0,
-      lowStock: counts.low_stock || 0,
-      mediumStock: counts.medium_stock || 0,
-      healthyStock: counts.healthy_stock || 0,
-      requiringRestock: (counts.out_of_stock || 0) + (counts.low_stock || 0)
+      totalProducts: actualTotalCount, // Accurate total count
+      displayedProducts: enrichedProducts.length, // How many are shown in the list
+      totalStock: statusCounts.totalStock,
+      outOfStock: statusCounts.out_of_stock || 0,
+      lowStock: statusCounts.low_stock || 0,
+      healthyStock: statusCounts.healthy_stock || 0, // Now includes medium stock
+      requiringRestock: (statusCounts.out_of_stock || 0) + (statusCounts.low_stock || 0)
     },
     products: enrichedProducts
   });
