@@ -471,13 +471,13 @@ STRICT GROUNDING RULES:
   // 1. Google Gemini
   if (geminiKey && geminiKey !== "your_key_here") {
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${geminiKey}`;
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 900 }
+          generationConfig: { maxOutputTokens: 900 }
         })
       });
       if (response.ok) {
@@ -710,15 +710,15 @@ Do not add specifications, dimensions, materials, colors, ingredients, certifica
 
 Return ONLY the description text.`;
 
-  if (geminiKey && geminiKey !== "your_key_here") {
+  if (geminiKey && geminiKey !== "your_gemini_api_key_here" && geminiKey !== "your_key_here") {
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${geminiKey}`;
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 120 }
+          generationConfig: { maxOutputTokens: 120 }
         })
       });
       if (response.ok) {
