@@ -25,14 +25,14 @@ function formatINR(val) {
 }
 
 const SUGGESTED_QUESTIONS = [
-  "What products are available in Electronics?",
-  "Show electronics under ₹50,000.",
-  "Which products are currently in stock?",
-  "What is the cheapest product in Audio?",
-  "Which products are popular?",
-  "What laptop options are available?",
-  "Show products between ₹10,000 and ₹30,000.",
-  "Show me products that are out of stock."
+  "Show me products in Electronics",
+  "What fitness products do you have?",
+  "Show me products under ₹1000",
+  "Which products are currently out of stock?",
+  "Show me beauty products",
+  "What's the most expensive product?",
+  "Show me Sports & Fitness items",
+  "Which products are in Home & Kitchen?"
 ];
 
 // Render markdown-style bold text (**text**) without a heavy library
@@ -70,7 +70,7 @@ export default function VendorAssistant() {
     {
       id: "welcome",
       sender: "ai",
-      text: "Hello! I'm your **ShopSense AI Shopping Assistant**.\n\nI can help you discover products, compare prices, check stock availability, and find the best options across our catalog of 10,000+ items — all grounded in real database data.\n\nTry one of the suggested questions below, or ask me anything about the catalog.",
+      text: "Hello! I'm your **ShopSense AI Shopping Assistant**.\n\nI can help you discover products from your catalog, compare prices, check stock availability, and find the best options. All recommendations are from products currently in your store.\n\nTry one of the suggested questions below, or ask me anything about your catalog.",
       products: [],
       sources: []
     }
