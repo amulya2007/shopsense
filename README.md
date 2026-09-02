@@ -69,7 +69,7 @@ shopsense/
 
 ## Setup
 
-### 1. Backend
+### 1. Backend(server)
 
 ```bash
 cd server
@@ -91,7 +91,7 @@ Starts the API on `http://localhost:4000`. On first run, SQLite initialises auto
 | Admin | admin@demo.com | admin123 |
 | Vendor | vendor@demo.com | vendor123 |
 
-### 2. Frontend
+### 2. Frontend(client)
 
 ```bash
 cd client
