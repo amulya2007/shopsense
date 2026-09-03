@@ -223,13 +223,6 @@ export default function VendorAssistant() {
                 {status.provider || "Local RAG"}
               </span>
             )}
-            <button
-              type="button"
-              onClick={clearChat}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold bg-white/10 hover:bg-white/20 transition-all text-white border border-white/15"
-            >
-              <RefreshCw size={13} /> Clear
-            </button>
           </div>
         </div>
       </header>
@@ -352,59 +345,74 @@ export default function VendorAssistant() {
                                 handleProductClick(p.id);
                               }
                             }}
-                            className={`rounded-xl p-3.5 border bg-white dark:bg-black/20 flex flex-col transition-all ${
+                            className={`rounded-xl p-3 border bg-white dark:bg-black/20 flex gap-3 transition-all ${
                               isClickable 
                                 ? "hover:border-emerald-700 hover:shadow-sm cursor-pointer" 
                                 : "border-gray-300 opacity-60"
                             }`}
                             style={{ borderColor: isClickable ? "var(--border)" : "#ddd" }}
                           >
-                            {/* Live Catalog Badge */}
-                            {isLiveCatalog && (
-                              <div className="mb-2">
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 font-semibold">
-                                  Your Catalog
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Name + category */}
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <span className="font-semibold text-xs leading-snug" style={{ color: "var(--ink)" }}>
-                                {p.name}
-                              </span>
-                              <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 whitespace-nowrap">
-                                {p.category}
-                              </span>
+                            {/* Product Image */}
+                            <div className="shrink-0">
+                              <img
+                                src={p.imageUrl || "/placeholder.png"}
+                                alt={p.name}
+                                className="w-20 h-20 object-cover rounded-lg border"
+                                style={{ borderColor: "var(--border)" }}
+                                onError={(e) => {
+                                  e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpolyline points='21 15 16 10 5 21'/%3E%3C/svg%3E";
+                                }}
+                              />
                             </div>
 
-                            {/* Description */}
-                            {p.description && (
-                              <p className="text-[11px] text-[var(--ink-soft)] line-clamp-2 mb-2.5">
-                                {p.description}
-                              </p>
-                            )}
+                            {/* Product Info */}
+                            <div className="flex-1 min-w-0">
+                              {/* Live Catalog Badge */}
+                              {isLiveCatalog && (
+                                <div className="mb-2">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 font-semibold">
+                                    Your Catalog
+                                  </span>
+                                </div>
+                              )}
 
-                            {/* Vendor badge for dataset products */}
-                            {!isLiveCatalog && p.vendor && (
-                              <div className="mb-2">
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                                  {p.vendor}
+                              {/* Name + category */}
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <span className="font-semibold text-xs leading-snug" style={{ color: "var(--ink)" }}>
+                                  {p.name}
+                                </span>
+                                <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 whitespace-nowrap">
+                                  {p.category}
                                 </span>
                               </div>
-                            )}
 
-                            {/* Price / Stock / Popularity row */}
-                            <div className="mt-auto pt-2 border-t border-black/5 grid grid-cols-3 gap-1.5 text-[11px] mb-2">
-                              <div>
-                                <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5">Price</span>
-                                <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">
-                                  {formatINR(p.price)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5">Stock</span>
-                                <span className={`font-semibold ${p.stock > 0 ? "text-emerald-700" : "text-rose-600"}`}>
+                              {/* Description */}
+                              {p.description && (
+                                <p className="text-[11px] text-[var(--ink-soft)] line-clamp-2 mb-2.5">
+                                  {p.description}
+                                </p>
+                              )}
+
+                              {/* Vendor badge for dataset products */}
+                              {!isLiveCatalog && p.vendor && (
+                                <div className="mb-2">
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                    {p.vendor}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Price / Stock / Popularity row */}
+                              <div className="mt-auto pt-2 border-t border-black/5 grid grid-cols-3 gap-1.5 text-[11px] mb-2">
+                                <div>
+                                  <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5">Price</span>
+                                  <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">
+                                    {formatINR(p.price)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] uppercase font-bold text-[var(--ink-soft)] block mb-0.5">Stock</span>
+                                  <span className={`font-semibold ${p.stock > 0 ? "text-emerald-700" : "text-rose-600"}`}>
                                   {p.stock > 0 ? `${p.stock}` : "Out of stock"}
                                 </span>
                               </div>
@@ -418,27 +426,8 @@ export default function VendorAssistant() {
                                   </span>
                                 </div>
                               )}
-                            </div>
-
-                            {/* View Product Button - only for live catalog products */}
-                            {isClickable && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleProductClick(p.id);
-                                }}
-                                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all bg-emerald-700 text-white hover:bg-emerald-800"
-                              >
-                                <ExternalLink size={11} /> View Details
-                              </button>
-                            )}
-                            
-                            {/* Info badge for dataset products */}
-                            {!isClickable && (
-                              <div className="text-[10px] text-center py-1.5 px-2 rounded bg-gray-50 text-gray-600">
-                                Reference Product
                               </div>
-                            )}
+                            </div>
                           </div>
                         );
                       })}
@@ -533,6 +522,17 @@ export default function VendorAssistant() {
             >
               <Send size={15} />
               <span className="hidden sm:inline">Send</span>
+            </button>
+            <button
+              type="button"
+              onClick={clearChat}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold border transition-all hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+              style={{ borderColor: "var(--border)", color: "var(--ink)" }}
+              title="Clear chat history"
+            >
+              <RefreshCw size={15} />
+              <span className="hidden sm:inline">Clear</span>
             </button>
           </form>
           <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: "var(--ink-soft)" }}>

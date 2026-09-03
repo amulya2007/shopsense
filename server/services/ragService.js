@@ -262,34 +262,7 @@ function buildVectorStore() {
     console.error("[RAG] Error reading live products:", err);
   }
 
-  // 2. Historical dataset products (analytics_products — 10 k+ items)
-  try {
-    const datasetProducts = db.prepare(`
-      SELECT product_id AS id, product_name AS name, category, price, stock
-      FROM analytics_products
-    `).all();
-
-    datasetProducts.forEach((p) => {
-      const identity = extractProductIdentity(p.name);
-      const textContent = `${p.name} ${p.name} ${identity.type || ""} Category: ${p.category} Price: ₹${p.price} Stock: ${p.stock} units ShopSense Marketplace Catalog`;
-      const vector = generateVector(textContent, p.category, p.price);
-      documents.push({
-        id: String(p.id),
-        name: p.name,
-        description: `ShopSense catalog product in ${p.category}.`,
-        category: p.category,
-        price: Number(p.price),
-        stock: Number(p.stock),
-        vendor: "ShopSense Marketplace",
-        imageUrl: "",
-        origin: "historical_dataset",
-        textContent,
-        vector
-      });
-    });
-  } catch (err) {
-    console.error("[RAG] Error reading dataset products:", err);
-  }
+  // Dataset products REMOVED - Only show catalog products in AI Assistant
 
   vectorStore = documents;
   isInitialized = true;
