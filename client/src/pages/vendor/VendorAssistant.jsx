@@ -14,6 +14,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import api from "../../lib/api";
+import { useAuth } from "../../context/auth";
 
 function formatINR(val) {
   if (val === undefined || val === null) return "₹0";
@@ -65,12 +66,13 @@ function MessageText({ text }) {
 }
 
 export default function VendorAssistant() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([
     {
       id: "welcome",
       sender: "ai",
-      text: "Hello! I'm your **ShopSense AI Shopping Assistant**.\n\nI can help you discover products from your catalog, compare prices, check stock availability, and find the best options. All recommendations are from products currently in your store.\n\nTry one of the suggested questions below, or ask me anything about your catalog.",
+      text: "Hello! I'm your **ShopSense AI Business Assistant**.\n\nI can help you manage your catalog, check inventory, analyze stock levels, and find products. All information is from your vendor account.\n\nTry one of the suggested questions below, or ask me anything about your business.",
       products: [],
       sources: []
     }
@@ -128,7 +130,8 @@ export default function VendorAssistant() {
 
       const res = await api.post("/ai/shopping-assistant", {
         question: q,
-        conversationHistory: history
+        conversationHistory: history,
+        vendorId: user?.id
       });
 
       const aiMessage = {
@@ -143,7 +146,7 @@ export default function VendorAssistant() {
       console.error("AI Assistant error:", err);
       const errMsg =
         err.response?.data?.error ||
-        "The AI Shopping Assistant is temporarily unavailable. Please try again.";
+        "The AI Business Assistant is temporarily unavailable. Please try again.";
       setError(errMsg);
       setMessages((prev) => [
         ...prev,
@@ -211,9 +214,9 @@ export default function VendorAssistant() {
                 </span>
               )}
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold">AI Shopping Assistant</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">AI Business Assistant</h1>
             <p className="mt-1 text-sm text-white/80 max-w-xl">
-              Ask natural-language questions to discover, filter, and compare products grounded in the ShopSense catalog.
+              Manage your inventory, analyze products, and get insights about your vendor catalog.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -297,7 +300,7 @@ export default function VendorAssistant() {
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-white">
                       <Bot size={11} />
                     </span>
-                    <span>ShopSense Assistant</span>
+                    <span>Business Assistant</span>
                   </>
                 ) : (
                   <span>You</span>

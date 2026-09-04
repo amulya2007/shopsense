@@ -54,7 +54,7 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
  * RAG-powered shopping assistant endpoint.
  *
  * Body:
- *   { "question": string, "conversationHistory": optional array }
+ *   { "question": string, "conversationHistory": optional array, "vendorId": optional number }
  *
  * conversationHistory format (lightweight, last 2–4 turns is sufficient):
  *   [
@@ -63,7 +63,7 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
  */
 router.post("/shopping-assistant", async (req, res) => {
   try {
-    const { question, conversationHistory } = req.body;
+    const { question, conversationHistory, vendorId } = req.body;
 
     if (!question || typeof question !== "string" || !question.trim()) {
       return res.status(400).json({
@@ -80,7 +80,7 @@ router.post("/shopping-assistant", async (req, res) => {
     // Accept optional conversation history for follow-up context
     const history = Array.isArray(conversationHistory) ? conversationHistory.slice(-4) : [];
 
-    const result = await ragService.answerShoppingQuestion(question, history);
+    const result = await ragService.answerShoppingQuestion(question, history, vendorId);
 
     // ONLY show live catalog products (products that exist in vendor's actual catalog)
     // Dataset products are NOT shown as they can't be viewed/purchased

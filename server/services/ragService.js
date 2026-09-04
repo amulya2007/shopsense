@@ -224,7 +224,7 @@ function buildVectorStore() {
   // 1. Live vendor products
   try {
     const liveProducts = db.prepare(`
-      SELECT p.id, p.name, p.description, p.category, p.price, p.stock, p.image_url,
+      SELECT p.id, p.vendor_id, p.name, p.description, p.category, p.price, p.stock, p.image_url,
              v.business_name AS vendor_name
       FROM products p
       LEFT JOIN vendors v ON p.vendor_id = v.id
@@ -238,6 +238,7 @@ function buildVectorStore() {
       const vector = generateVector(textContent, p.category, p.price);
       documents.push({
         id: String(p.id),
+        vendorId: Number(p.vendor_id),
         name: p.name,
         description: p.description || "",
         category: p.category,
@@ -289,7 +290,7 @@ function buildVectorStore() {
 // ---------------------------------------------------------------------------
 // Retrieve: semantic similarity + hard constraint filtering + ranked results
 // ---------------------------------------------------------------------------
-function retrieveProducts(query, topK = 6, conversationContext = "") {
+function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = null) {
   if (!isInitialized || vectorStore.length === 0) buildVectorStore();
 
   // Merge conversation context for better follow-up understanding
@@ -299,8 +300,14 @@ function retrieveProducts(query, topK = 6, conversationContext = "") {
   const constraints = extractQueryConstraints(fullQuery);
   const queryIdentity = extractProductIdentity(fullQuery);
 
+  // Filter by vendorId if provided (for vendor-specific queries)
+  let productsToSearch = vectorStore;
+  if (vendorId !== null && vendorId !== undefined) {
+    productsToSearch = vectorStore.filter(doc => doc.vendorId === Number(vendorId));
+  }
+
   // ---- Score every document ----
-  const scored = vectorStore.map((doc) => {
+  const scored = productsToSearch.map((doc) => {
     let similarity = cosineSimilarity(queryVector, doc.vector);
 
     // Token overlap boost — product name matters more than category text
@@ -733,7 +740,7 @@ Return ONLY the description text.`;
   */
 }
 
-async function answerShoppingQuestion(question, conversationHistory = []) {
+async function answerShoppingQuestion(question, conversationHistory = [], vendorId = null) {
   if (!question || typeof question !== "string" || !question.trim()) {
     throw new Error("A valid question string is required.");
   }
@@ -742,8 +749,8 @@ async function answerShoppingQuestion(question, conversationHistory = []) {
   // Build lightweight context from prior conversation
   const convContext = buildConversationContext(conversationHistory);
 
-  // 1. Retrieve products
-  const { products, constraints, constraintsMissed } = retrieveProducts(trimmedQuery, 6, convContext);
+  // 1. Retrieve products (filtered by vendorId if provided)
+  const { products, constraints, constraintsMissed } = retrieveProducts(trimmedQuery, 6, convContext, vendorId);
 
   // 2. Generate grounded response
   const answer = await generateLlmResponse(trimmedQuery, products, constraints, constraintsMissed);
