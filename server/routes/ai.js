@@ -38,7 +38,7 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
     const openAiKey = process.env.OPENAI_API_KEY;
     const hasGemini = Boolean(geminiKey && geminiKey !== "your_key_here");
     const hasOpenAI = Boolean(openAiKey && openAiKey !== "your_key_here");
-    const provider  = hasGemini ? "Google Gemini" : hasOpenAI ? "OpenAI" : "Local";
+    const provider  = hasGemini ? "ShopSense AI" : hasOpenAI ? "OpenAI" : "Local";
 
     res.json({ description, provider });
   } catch (error) {
@@ -110,7 +110,7 @@ router.get("/status", (req, res) => {
   const hasLlmKey  = hasGemini || hasOpenAI ||
                      Boolean(process.env.LLM_API_KEY && process.env.LLM_API_KEY !== "your_key_here");
 
-  const provider = hasGemini ? "Google Gemini" : hasOpenAI ? "OpenAI" : "Grounded Catalog RAG (Local)";
+  const provider = hasGemini ? "ShopSense AI" : hasOpenAI ? "OpenAI" : "Grounded Catalog RAG (Local)";
 
   res.json({
     status:               "online",
