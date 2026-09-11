@@ -243,7 +243,6 @@ Live audit comparing imported SQLite table row counts against source XLSX workbo
 Both endpoints support `?scope=vendor` (live vendor sales) or `?scope=marketplace` (full historical dataset). Files are streamed with correct `Content-Type: text/csv` and `Content-Disposition` headers.
 
 ---
-
 ## AI Shopping Assistant
 
 ShopSense includes a Retrieval-Augmented Generation (RAG) AI Shopping Assistant that answers natural-language product queries using real catalog data, with strict grounding and no hallucination.
