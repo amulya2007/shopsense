@@ -144,4 +144,11 @@ router.post("/refresh-index", (req, res) => {
   }
 });
 
+// Simple public mock chat endpoint
+router.get('/chat', (req, res) => {
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'Missing q query param' });
+  res.json({ answer: `Mock response for "${query}"` });
+});
+
 module.exports = router;

@@ -5,12 +5,15 @@ const path = require("path");
 require("./db"); // initializes + seeds the database
 
 const authRoutes = require("./routes/auth");
+const aiRoutes = require("./routes/ai");
 const vendorRoutes = require("./routes/vendor");
 const adminRoutes = require("./routes/admin");
 const analyticsRoutes = require("./routes/analytics");
-const aiRoutes = require("./routes/ai");
+// const swaggerSetup = require('./swagger'); // will be required after app is created
 
 const app = express();
+const swaggerSetup = require('./swagger');
+swaggerSetup(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "https://shopsense-client.onrender.com",
@@ -33,12 +36,20 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
 }));
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/vendor", vendorRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/ai", aiRoutes);
+
+// Root aliases for clients making direct requests without /api prefix
+app.use("/auth", authRoutes);
+app.use("/vendor", vendorRoutes);
+app.use("/admin", adminRoutes);
+app.use("/analytics", analyticsRoutes);
+app.use("/ai", aiRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -54,4 +65,8 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`ShopSense API running on port ${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`ShopSense API running on port ${PORT}`));
+}
+module.exports = app;
+// Removed duplicate listen; handled conditionally above

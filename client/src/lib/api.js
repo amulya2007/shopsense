@@ -2,10 +2,16 @@ import axios from "axios";
 
 const configuredBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
 
+// Normalize base URL so that whether VITE_API_URL is empty (relying on Vite proxy),
+// a host like http://localhost:4000, or already has /api, it always routes properly to /api
+const resolvedBaseUrl = !configuredBaseUrl
+  ? "/api"
+  : configuredBaseUrl.endsWith("/api")
+  ? configuredBaseUrl
+  : `${configuredBaseUrl}/api`;
+
 const api = axios.create({
-  // Development requests use Vite's proxy. Production must receive VITE_API_URL
-  // from the deployment environment, e.g. https://your-api.onrender.com/api.
-  baseURL: configuredBaseUrl || "/api",
+  baseURL: resolvedBaseUrl,
 });
 
 api.interceptors.request.use((config) => {
