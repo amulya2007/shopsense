@@ -367,7 +367,6 @@ PATCH  /api/vendor/products/:id/stock
 POST   /api/vendor/products/:id/stock-adjustments
 POST   /api/vendor/images
 ```
-
 ### Analytics
 
 ```
