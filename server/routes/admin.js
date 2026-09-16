@@ -23,7 +23,6 @@ router.get("/dashboard", (req, res) => {
        FROM vendors ORDER BY joined_at DESC LIMIT 8`
     )
     .all();
-
   res.json({ totalVendors, pending, approved, suspended, recentVendors });
 });
 
