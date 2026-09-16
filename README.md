@@ -360,7 +360,7 @@ All `/api/vendor/*` and `/api/analytics/*` endpoints require `Authorization: Bea
 ```
 GET    /api/vendor/dashboard
 GET    /api/vendor/products
-POST   /api/vendor/products
+POST   /api/vendor/product
 PUT    /api/vendor/products/:id
 DELETE /api/vendor/products/:id
 PATCH  /api/vendor/products/:id/stock

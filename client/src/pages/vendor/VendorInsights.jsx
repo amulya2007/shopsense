@@ -236,13 +236,12 @@ function VendorBenchmarkPanel({ benchmark }) {
                     <Icon size={14} className="text-[var(--primary)]" /> {data.label}
                   </span>
                   <span
-                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                      isAbove
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${isAbove
                         ? "bg-emerald-100 text-emerald-800"
                         : isBelow
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
                   >
                     {isAbove ? <ArrowUpRight size={13} /> : isBelow ? <ArrowDownRight size={13} /> : null}
                     {data.formattedDiff} {isAbove ? "Above" : isBelow ? "Below" : "Avg"}
@@ -351,7 +350,7 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
           const hour = parseInt(item.label.split(':')[0]);
           displayLabel = `${hour}:00`;
         }
-        
+
         return {
           label: displayLabel,
           fullDate: item.date || item.label || "",
@@ -402,41 +401,41 @@ function SpaciousSalesChart({ data, timeframe: externalTimeframe, onTimeframeCha
   if (!series.length) return <Empty message="No recorded sales for this period." />;
 
   const metricConfig = {
-    revenue: { 
-      label: "Revenue (₹)", 
-      format: (v) => formatINR(v), 
+    revenue: {
+      label: "Revenue (₹)",
+      format: (v) => formatINR(v),
       shortFormat: (v) => {
         const val = Number(v);
         if (val === 0) return "₹0";
         if (val < 1000) return `₹${Math.round(val)}`;
         if (val < 100000) return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
         return `₹${(val / 100000).toFixed(val % 100000 === 0 ? 0 : 1)}L`;
-      }, 
-      color: "#0E4B44" 
+      },
+      color: "#0E4B44"
     },
-    units: { 
-      label: "Units Sold", 
-      format: (v) => `${number(v)} units`, 
-      shortFormat: (v) => number(v), 
-      color: "#D97706" 
+    units: {
+      label: "Units Sold",
+      format: (v) => `${number(v)} units`,
+      shortFormat: (v) => number(v),
+      color: "#D97706"
     },
-    orders: { 
-      label: "Sales", 
-      format: (v) => `${number(v)} sales`, 
-      shortFormat: (v) => number(v), 
-      color: "#2563EB" 
+    orders: {
+      label: "Sales",
+      format: (v) => `${number(v)} sales`,
+      shortFormat: (v) => number(v),
+      color: "#2563EB"
     },
-    aov: { 
-      label: "Avg Sale Value", 
-      format: (v) => formatINR(v), 
+    aov: {
+      label: "Avg Sale Value",
+      format: (v) => formatINR(v),
       shortFormat: (v) => {
         const val = Number(v);
         if (val === 0) return "₹0";
         if (val < 1000) return `₹${Math.round(val)}`;
         if (val < 100000) return `₹${(val / 1000).toFixed(0)}k`;
         return `₹${(val / 100000).toFixed(1)}L`;
-      }, 
-      color: "#7C3AED" 
+      },
+      color: "#7C3AED"
     }
   };
   const activeCfg = metricConfig[metric];
@@ -1028,7 +1027,8 @@ export default function VendorInsights() {
       const [patternsResult, rulesResult, recommendationsResult, forecastResult, validationResult] = deferred;
       const forecast = forecastResult.status === "fulfilled" ? forecastResult.value.data : null;
       const forecasts = rows(forecast?.forecasts);
-      setData((current) => ({ ...current,
+      setData((current) => ({
+        ...current,
         patterns: patternsResult.status === "fulfilled" ? { ...patternsResult.value.data, patterns: rows(patternsResult.value.data?.patterns), categoryPatterns: rows(patternsResult.value.data?.categoryPatterns) } : current.patterns,
         rules: rulesResult.status === "fulfilled" ? { ...rulesResult.value.data, rules: rows(rulesResult.value.data?.rules), categoryRules: rows(rulesResult.value.data?.categoryRules) } : current.rules,
         recommendations: recommendationsResult.status === "fulfilled" ? { ...recommendationsResult.value.data, recommendations: rows(recommendationsResult.value.data?.recommendations), topSelling: rows(recommendationsResult.value.data?.topSelling), categoryAffinity: rows(recommendationsResult.value.data?.categoryAffinity) } : current.recommendations,
@@ -1474,7 +1474,6 @@ export default function VendorInsights() {
               empty="No customers match the selected spending category or search filter."
             />
           </Panel>
-
           {/* ========================================================================= */}
           {/* 3. SALES PERFORMANCE (Day, Week, Month - Spacious Graph) */}
           {/* ========================================================================= */}
@@ -1484,8 +1483,8 @@ export default function VendorInsights() {
             title="Sales Performance Over Time"
             description={`Revenue and unit volume grouped by the selected period. Day shows hourly breakdown (aggregated across all sales), Week shows the 7-day breakdown (Monday–Sunday), and Month shows monthly performance chronologically.`}
           >
-            <SpaciousSalesChart 
-              data={reportingData?.salesOverTime || data.sales} 
+            <SpaciousSalesChart
+              data={reportingData?.salesOverTime || data.sales}
               timeframe={reportingTimeframe}
               onTimeframeChange={setReportingTimeframe}
             />
@@ -1722,7 +1721,6 @@ export default function VendorInsights() {
                 empty="No recommendations meet the current thresholds."
               />
             </Panel>
-
             <Panel
               icon={GitFork}
               eyebrow="Intelligence"
@@ -1778,7 +1776,6 @@ export default function VendorInsights() {
               )}
             </Panel>
           </div>
-
           {/* ========================================================================= */}
           {/* 8. ASSOCIATION RULES & DATA QUALITY AUDIT */}
           {/* ========================================================================= */}
