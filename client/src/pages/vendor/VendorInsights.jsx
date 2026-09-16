@@ -237,10 +237,10 @@ function VendorBenchmarkPanel({ benchmark }) {
                   </span>
                   <span
                     className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${isAbove
-                        ? "bg-emerald-100 text-emerald-800"
-                        : isBelow
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-slate-100 text-slate-700"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : isBelow
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-slate-100 text-slate-700"
                       }`}
                   >
                     {isAbove ? <ArrowUpRight size={13} /> : isBelow ? <ArrowDownRight size={13} /> : null}
@@ -1391,7 +1391,6 @@ export default function VendorInsights() {
                   </div>
                 </div>
               </div>
-
               {/* Low Value Tier */}
               <div className="rounded-2xl p-5 border transition-all" style={{ background: "var(--surface)", borderColor: "rgba(100, 116, 139, 0.2)" }}>
                 <div className="flex items-center justify-between">
