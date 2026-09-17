@@ -25,7 +25,6 @@ router.get("/dashboard", (req, res) => {
     .all();
   res.json({ totalVendors, pending, approved, suspended, recentVendors });
 });
-
 router.get("/vendors", (req, res) => {
   const status = req.query.status;
   let rows;
