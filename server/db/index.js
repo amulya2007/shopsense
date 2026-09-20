@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS admins (
   password TEXT NOT NULL
 );
 
+
 CREATE TABLE IF NOT EXISTS vendors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   full_name TEXT NOT NULL,
@@ -245,7 +246,7 @@ if (salesCount === 0) {
   if (allProducts.length > 0) {
     const insertSale = db.prepare("INSERT INTO sales (vendor_id, product_id, quantity, amount, sold_at) VALUES (?, ?, ?, ?, ?)");
     const now = new Date();
-    
+
     allProducts.forEach((p, idx) => {
       const salesCountForProd = 3 + (idx % 4);
       for (let s = 0; s < salesCountForProd; s++) {
