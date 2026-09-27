@@ -54,16 +54,19 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
  * RAG-powered shopping assistant endpoint.
  *
  * Body:
- *   { "question": string, "conversationHistory": optional array, "vendorId": optional number }
+ *   { "question": string, "conversationHistory": optional array }
+ *
+ * Vendor requests are always scoped to the vendor ID in the JWT. Admins may
+ * provide a vendorId explicitly when inspecting a vendor's catalog.
  *
  * conversationHistory format (lightweight, last 2–4 turns is sufficient):
  *   [
  *     { "role": "assistant", "products": [{ "name": "...", "category": "..." }] }
  *   ]
  */
-router.post("/shopping-assistant", async (req, res) => {
+router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req, res) => {
   try {
-    const { question, conversationHistory, vendorId } = req.body;
+    const { question, conversationHistory } = req.body;
 
     if (!question || typeof question !== "string" || !question.trim()) {
       return res.status(400).json({
@@ -80,11 +83,28 @@ router.post("/shopping-assistant", async (req, res) => {
     // Accept optional conversation history for follow-up context
     const history = Array.isArray(conversationHistory) ? conversationHistory.slice(-4) : [];
 
+    // Never trust a browser-supplied vendor ID for vendor accounts. The vendor
+    // ID is the authenticated vendor's primary key in the signed JWT.
+    let vendorId;
+    if (req.user.role === "vendor") {
+      vendorId = Number(req.user.id);
+    } else {
+      const requestedVendorId = req.body.vendorId;
+      vendorId = Number(requestedVendorId);
+      if (!Number.isInteger(vendorId) || vendorId <= 0) {
+        return res.status(400).json({
+          error: "vendorId is required when an administrator uses the shopping assistant."
+        });
+      }
+    }
+
     const result = await ragService.answerShoppingQuestion(question, history, vendorId);
 
     // ONLY show live catalog products (products that exist in vendor's actual catalog)
     // Dataset products are NOT shown as they can't be viewed/purchased
-    const liveProducts = result.products.filter(p => p.origin === "live_catalog");
+    const liveProducts = result.products.filter(
+      p => p.origin === "live_catalog" && p.vendorId === vendorId
+    );
     
     res.json({
       answer:   result.answer,

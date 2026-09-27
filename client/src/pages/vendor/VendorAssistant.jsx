@@ -14,7 +14,6 @@ import {
   ExternalLink
 } from "lucide-react";
 import api from "../../lib/api";
-import { useAuth } from "../../context/auth";
 
 function formatINR(val) {
   if (val === undefined || val === null) return "₹0";
@@ -66,7 +65,6 @@ function MessageText({ text }) {
 }
 
 export default function VendorAssistant() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([
     {
@@ -130,8 +128,7 @@ export default function VendorAssistant() {
 
       const res = await api.post("/ai/shopping-assistant", {
         question: q,
-        conversationHistory: history,
-        vendorId: user?.id
+        conversationHistory: history
       });
 
       const aiMessage = {
