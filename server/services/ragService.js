@@ -406,7 +406,8 @@ function retrieveProducts(
     constraints.isExpensiveQuery ||
     constraints.isPopularQuery ||
     Boolean(queryIdentity.type);
-  const isCatalogBrowse = /\b(show|list|browse|display)\b[\s\S]{0,30}\b(products?|items?|catalog|options?)\b|\bwhat do you sell\b|\bwhat products do you have\b|\byour products\b/i.test(fullQuery);
+  const isCatalogBrowse =
+    /\b(show|list|browse|display)\b[\s\S]{0,30}\b(products?|items?|catalog|options?)\b|\bwhat do you sell\b|\bwhat products do you have\b|\byour products\b|\bmore\b|\banother\b|\bother options?\b|\badditional\b/i.test(fullQuery);
 
   // When a question has no recognized catalog intent, require at least one
   // actual word match instead of returning arbitrary nearest neighbors.
