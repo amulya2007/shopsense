@@ -596,7 +596,9 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
   // Build intro based on constraints
   let intro = `Based on the ShopSense catalog, here are the top **${products.length}** product${products.length > 1 ? "s" : ""} matching your inquiry:\n\n`;
 
-  if (constraints.isPopularQuery) {
+  if (constraints.isExpensiveQuery && products.length === 1) {
+    intro = `The most expensive product matching your query is:\n\n`;
+  } else if (constraints.isPopularQuery) {
     const hasPopData = products.some(p => p.unitsSold > 0);
     if (hasPopData) {
       intro = `Here are the most popular products in the ShopSense catalog, ranked by historical units sold:\n\n`;
@@ -819,8 +821,8 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
     )
     : [];
   const isSingleTopResultQuery =
-    /\b(most|highest|costliest|priciest)\b/i.test(trimmedQuery) &&
-    /\b(product|item|option)\b/i.test(trimmedQuery);
+    /\b(?:(?:an?|one|the)\s+)?(?:most\s+)?(?:expensive|costly|highest priced|costliest|priciest)\s+(?:product|item|option)\b/i.test(trimmedQuery) ||
+    /\b(?:most expensive|highest priced|costliest|priciest)\s+(?:product|item|option)\b/i.test(trimmedQuery);
   const topK = isSingleTopResultQuery ? 1 : 6;
 
   // 1. Retrieve products (filtered by vendorId if provided)
