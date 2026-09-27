@@ -169,10 +169,10 @@ function extractQueryConstraints(query) {
   // Category detection — ordered longest match first to avoid "home" swallowing "home & kitchen"
   const KNOWN_CATEGORIES = [
     "home & kitchen", "computers", "electronics", "accessories",
-    "wearables", "fashion", "beauty", "audio", "home"
+    "wearables", "fashion", "beauty", "sports", "audio", "home"
   ];
   for (const cat of KNOWN_CATEGORIES) {
-    if (q.includes(cat)) {
+    if (new RegExp(`\\b${cat.replace(/[&]/g, "\\&")}\\b`, "i").test(q)) {
       targetCategory = cat;
       break;
     }
@@ -381,7 +381,9 @@ function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = 
   let valid = scored.filter(s => s.hardPenalty === 0);
   if (queryIdentity.type) {
     const typed = valid.filter((s) => isSameProductKind(fullQuery, s.doc.name, "", s.doc.category));
-    if (typed.length > 0) valid = typed;
+    // An explicit product type is a hard relevance boundary. Never fill
+    // missing matches with unrelated products.
+    valid = typed;
   }
   const disqualified = scored.filter(s => s.hardPenalty > 0);
 

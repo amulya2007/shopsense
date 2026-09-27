@@ -94,7 +94,16 @@ function nameOverlap(left, right) {
 function isSameProductKind(leftName, rightName, leftCategory = "", rightCategory = "") {
   const left = extractProductIdentity(leftName, leftCategory);
   const right = extractProductIdentity(rightName, rightCategory);
-  if (left.type && right.type) return left.type === right.type;
+  if (left.type && right.type) {
+    const relatedTypes = new Set([
+      [left.type, right.type].sort().join(":")
+    ]);
+    return (
+      left.type === right.type ||
+      relatedTypes.has("running_shoes:shoes") ||
+      relatedTypes.has("fitness_tracker:smartwatch")
+    );
+  }
   if (left.type || right.type) return false;
   return nameOverlap(leftName, rightName) >= 0.6;
 }
