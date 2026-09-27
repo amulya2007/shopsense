@@ -49,6 +49,36 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
   }
 });
 
+router.post("/generate-seo-content", requireAuth(["vendor", "admin"]), async (req, res) => {
+  try {
+    const { name, category, hints } = req.body;
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Product name is required." });
+    }
+    if (typeof category !== "string" || !category.trim()) {
+      return res.status(400).json({ error: "Product category is required." });
+    }
+    if (name.trim().length > 200 || category.trim().length > 100) {
+      return res.status(400).json({ error: "Product name or category is too long." });
+    }
+    if (hints !== undefined && typeof hints !== "string") {
+      return res.status(400).json({ error: "Product hints must be text." });
+    }
+
+    const result = await ragService.generateSeoContent(
+      name.trim(),
+      category.trim(),
+      typeof hints === "string" ? hints.trim().slice(0, 1000) : ""
+    );
+    return res.json(result);
+  } catch (error) {
+    console.error("SEO content generation error:", error);
+    return res.status(500).json({
+      error: "Failed to generate SEO content. Please try again or complete the fields manually."
+    });
+  }
+});
+
 /**
  * POST /api/ai/shopping-assistant
  * RAG-powered shopping assistant endpoint.

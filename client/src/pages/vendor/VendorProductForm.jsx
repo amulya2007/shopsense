@@ -44,6 +44,14 @@ export default function VendorProductForm() {
   const [form, setForm] = useState({
     name: "",
     description: "",
+    vendorHints: "",
+    seoTitle: "",
+    shortDescription: "",
+    metaTitle: "",
+    metaDescription: "",
+    seoKeywords: "",
+    productTags: "",
+    keyFeatures: "",
     category: "",
     price: "",
     stock: "",
@@ -55,8 +63,9 @@ export default function VendorProductForm() {
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
-  const [generatingDesc, setGeneratingDesc] = useState(false);
-  const [descError, setDescError] = useState("");
+  const [generatingSeo, setGeneratingSeo] = useState(false);
+  const [seoError, setSeoError] = useState("");
+  const [seoProvider, setSeoProvider] = useState("");
   const blurTimeout = useRef(null);
   const imageInput = useRef(null);
 
@@ -67,7 +76,15 @@ export default function VendorProductForm() {
         if (product) {
           setForm({
             name: product.name,
-            description: product.description,
+            description: product.description || "",
+            vendorHints: product.vendor_hints || "",
+            seoTitle: product.seo_title || "",
+            shortDescription: product.short_description || "",
+            metaTitle: product.meta_title || "",
+            metaDescription: product.meta_description || "",
+            seoKeywords: product.seo_keywords || "",
+            productTags: product.product_tags || "",
+            keyFeatures: product.key_features || "",
             category: product.category,
             price: product.price,
             stock: product.stock,
@@ -90,23 +107,38 @@ export default function VendorProductForm() {
     }
   };
 
-  const handleGenerateDescription = async () => {
+  const handleGenerateSeoContent = async () => {
     const name = form.name.trim();
     const category = form.category.trim();
     if (!name || !category) {
-      setDescError("Enter a product name and category first, then generate a description.");
+      setSeoError("Enter a product name and category first, then generate SEO content.");
       return;
     }
-    setDescError("");
-    setGeneratingDesc(true);
+    setSeoError("");
+    setGeneratingSeo(true);
     try {
-      const res = await api.post("/ai/generate-description", { name, category });
-      setForm((prev) => ({ ...prev, description: res.data.description }));
+      const res = await api.post("/ai/generate-seo-content", {
+        name,
+        category,
+        hints: form.vendorHints
+      });
+      setSeoProvider(res.data.provider || "AI");
+      setForm((prev) => ({
+        ...prev,
+        seoTitle: res.data.seoTitle || "",
+        description: res.data.description || "",
+        shortDescription: res.data.shortDescription || "",
+        metaTitle: res.data.metaTitle || "",
+        metaDescription: res.data.metaDescription || "",
+        seoKeywords: (res.data.seoKeywords || []).join(", "),
+        productTags: (res.data.productTags || []).join(", "),
+        keyFeatures: (res.data.keyFeatures || []).join("\n")
+      }));
     } catch (err) {
-      const msg = err.response?.data?.error || "AI is temporarily unavailable. You can write the description manually.";
-      setDescError(msg);
+      const msg = err.response?.data?.error || "Unable to generate SEO content. Please try again.";
+      setSeoError(msg);
     } finally {
-      setGeneratingDesc(false);
+      setGeneratingSeo(false);
     }
   };
 
@@ -293,21 +325,35 @@ export default function VendorProductForm() {
               </p>
             </div>
 
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
+                Vendor Hints
+              </label>
+              <textarea
+                rows={3}
+                value={form.vendorHints}
+                onChange={(e) => setForm((prev) => ({ ...prev, vendorHints: e.target.value }))}
+                placeholder="Add verified product details, materials, use cases, or features for the SEO content."
+                className="w-full px-4 py-3 rounded-lg text-sm focus-ring resize-y"
+                style={{ border: "1px solid var(--border)" }}
+              />
+            </div>
+
             {/* Description with AI */}
             <div className="lg:col-span-2">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-                  Description <span style={{ color: "var(--danger)" }}>*</span>
+                  SEO-Optimized Description <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
                 <button
                   type="button"
-                  onClick={handleGenerateDescription}
-                  disabled={generatingDesc || !form.name.trim() || !form.category.trim()}
+                  onClick={handleGenerateSeoContent}
+                  disabled={generatingSeo || !form.name.trim() || !form.category.trim()}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                   style={{ background: "var(--primary)", color: "white" }}
-                  title={!form.name.trim() || !form.category.trim() ? "Enter product name and category first" : "Generate description with AI"}
+                  title={!form.name.trim() || !form.category.trim() ? "Enter product name and category first" : "Generate all SEO fields"}
                 >
-                  {generatingDesc ? (
+                  {generatingSeo ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
                       Generating…
@@ -315,7 +361,7 @@ export default function VendorProductForm() {
                   ) : (
                     <>
                       <Sparkles size={14} />
-                      Generate with AI
+                      Generate SEO content
                     </>
                   )}
                 </button>
@@ -324,21 +370,116 @@ export default function VendorProductForm() {
                 required
                 rows={4}
                 value={form.description}
-                onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescError(""); }}
-                placeholder="Describe your product features, benefits, and key details..."
+                onChange={(e) => { setForm({ ...form, description: e.target.value }); setSeoError(""); }}
+                placeholder="SEO-optimized product description"
                 className="w-full px-4 py-3 rounded-lg text-sm focus-ring resize-none"
                 style={{ border: "1px solid var(--border)" }}
               />
               <p className="mt-1 text-xs" style={{ color: "var(--ink-soft)" }}>
-                AI generates a detailed three-line factual description. You can edit it before saving.
+                Generated content is based on your product details and hints. Edit any field before saving.
               </p>
-              {descError && (
+              {seoError && (
                 <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
                   <AlertCircle size={12} />
-                  {descError}
+                  {seoError}
                 </p>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-5 pb-4" style={{ borderBottom: "1px solid var(--border)" }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--primary)", color: "white" }}>
+              <Sparkles size={16} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-base">SEO Content</h2>
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                Review and edit these fields before saving your product{seoProvider ? ` · Generated with ${seoProvider}` : ""}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              SEO Product Title
+              <input
+                value={form.seoTitle}
+                onChange={(e) => setForm((prev) => ({ ...prev, seoTitle: e.target.value }))}
+                maxLength={160}
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              Short Description
+              <textarea
+                rows={2}
+                value={form.shortDescription}
+                onChange={(e) => setForm((prev) => ({ ...prev, shortDescription: e.target.value }))}
+                maxLength={500}
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              Meta Title
+              <input
+                value={form.metaTitle}
+                onChange={(e) => setForm((prev) => ({ ...prev, metaTitle: e.target.value }))}
+                maxLength={160}
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              Meta Description
+              <textarea
+                rows={2}
+                value={form.metaDescription}
+                onChange={(e) => setForm((prev) => ({ ...prev, metaDescription: e.target.value }))}
+                maxLength={320}
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              SEO Keywords
+              <textarea
+                rows={2}
+                value={form.seoKeywords}
+                onChange={(e) => setForm((prev) => ({ ...prev, seoKeywords: e.target.value }))}
+                maxLength={1000}
+                placeholder="Comma-separated keywords"
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+              Product Tags
+              <textarea
+                rows={2}
+                value={form.productTags}
+                onChange={(e) => setForm((prev) => ({ ...prev, productTags: e.target.value }))}
+                maxLength={1000}
+                placeholder="Comma-separated tags"
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide lg:col-span-2" style={{ color: "var(--ink-soft)" }}>
+              Key Features
+              <textarea
+                rows={4}
+                value={form.keyFeatures}
+                onChange={(e) => setForm((prev) => ({ ...prev, keyFeatures: e.target.value }))}
+                maxLength={2000}
+                placeholder="One feature per line"
+                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+              />
+            </label>
           </div>
         </div>
 

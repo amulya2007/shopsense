@@ -100,9 +100,22 @@ CREATE INDEX IF NOT EXISTS idx_sales_vendor_product ON sales(vendor_id, product_
 // CREATE TABLE IF NOT EXISTS does not add columns introduced in later versions,
 // so migrate the product image field before any catalog write is attempted.
 const productColumns = db.prepare("PRAGMA table_info(products)").all().map((column) => column.name);
-if (!productColumns.includes("image_url")) {
-  db.exec("ALTER TABLE products ADD COLUMN image_url TEXT");
-}
+const productMigrations = {
+  image_url: "TEXT",
+  seo_title: "TEXT NOT NULL DEFAULT ''",
+  short_description: "TEXT NOT NULL DEFAULT ''",
+  meta_title: "TEXT NOT NULL DEFAULT ''",
+  meta_description: "TEXT NOT NULL DEFAULT ''",
+  seo_keywords: "TEXT NOT NULL DEFAULT ''",
+  product_tags: "TEXT NOT NULL DEFAULT ''",
+  key_features: "TEXT NOT NULL DEFAULT ''",
+  vendor_hints: "TEXT NOT NULL DEFAULT ''",
+};
+Object.entries(productMigrations).forEach(([column, definition]) => {
+  if (!productColumns.includes(column)) {
+    db.exec(`ALTER TABLE products ADD COLUMN ${column} ${definition}`);
+  }
+});
 
 function readDataset(filename) {
   const workbook = XLSX.readFile(path.join(__dirname, "..", "..", "dataset", filename), { cellDates: false });

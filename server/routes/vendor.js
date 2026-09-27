@@ -96,6 +96,33 @@ function lowStockThreshold(value) {
   return Number.isInteger(threshold) && threshold >= 0 && threshold <= 1000000 ? threshold : null;
 }
 
+function productSeoFields(body, existing = {}) {
+  const definitions = {
+    seo_title: ["seoTitle", 160],
+    short_description: ["shortDescription", 500],
+    meta_title: ["metaTitle", 160],
+    meta_description: ["metaDescription", 320],
+    seo_keywords: ["seoKeywords", 1000],
+    product_tags: ["productTags", 1000],
+    key_features: ["keyFeatures", 2000],
+    vendor_hints: ["vendorHints", 1000],
+  };
+  const fields = {};
+
+  for (const [column, [property, maxLength]] of Object.entries(definitions)) {
+    const value = body[property] === undefined ? existing[column] || "" : body[property];
+    if (typeof value !== "string") {
+      return { error: `${property} must be text.` };
+    }
+    if (value.length > maxLength) {
+      return { error: `${property} must be ${maxLength} characters or fewer.` };
+    }
+    fields[column] = value.trim();
+  }
+
+  return { fields };
+}
+
 // Older AI output may contain catalog/prompt language. It is not suitable for
 // customers, so replace only those unmistakable system-style descriptions when
 // returning products to the catalog and product-details modal.
@@ -295,6 +322,9 @@ router.get("/inventory/alerts", (req, res) => {
 // Add product
 router.post("/products", (req, res) => {
   const body = req.body && typeof req.body === "object" ? req.body : {};
+  const seoResult = productSeoFields(body);
+  if (seoResult.error) return res.status(400).json({ error: seoResult.error });
+  const seo = seoResult.fields;
   const name = String(body.name || "").trim();
   const description = String(body.description || "").trim();
   const category = String(body.category || "").trim();
@@ -317,8 +347,11 @@ router.post("/products", (req, res) => {
   try {
     const info = db
       .prepare(
-        `INSERT INTO products (vendor_id, name, description, category, price, stock, image_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO products (
+           vendor_id, name, description, category, price, stock, image_url,
+           seo_title, short_description, meta_title, meta_description,
+           seo_keywords, product_tags, key_features, vendor_hints
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         req.user.id,
@@ -327,7 +360,15 @@ router.post("/products", (req, res) => {
         category,
         price,
         stock === undefined || stock === "" ? 0 : Number(stock),
-        normalizedImageUrl
+        normalizedImageUrl,
+        seo.seo_title,
+        seo.short_description,
+        seo.meta_title,
+        seo.meta_description,
+        seo.seo_keywords,
+        seo.product_tags,
+        seo.key_features,
+        seo.vendor_hints
       );
     const product = db.prepare("SELECT * FROM products WHERE id = ?").get(info.lastInsertRowid);
     try { ragService.buildVectorStore(); } catch (e) { console.error("RAG rebuild error:", e); }
@@ -346,6 +387,9 @@ router.put("/products/:id", (req, res) => {
   if (!product) return res.status(404).json({ error: "Product not found" });
 
   const { name, description, category, price, stock, imageUrl } = req.body;
+  const seoResult = productSeoFields(req.body, product);
+  if (seoResult.error) return res.status(400).json({ error: seoResult.error });
+  const seo = seoResult.fields;
   
   // Handle image URL: if undefined, keep existing; if empty string, keep existing; if invalid, keep existing
   let normalizedImageUrl = product.image_url; // Default to existing image
@@ -365,7 +409,11 @@ router.put("/products/:id", (req, res) => {
   }
   
   db.prepare(
-    `UPDATE products SET name=?, description=?, category=?, price=?, stock=?, image_url=? WHERE id=?`
+    `UPDATE products SET
+       name=?, description=?, category=?, price=?, stock=?, image_url=?,
+       seo_title=?, short_description=?, meta_title=?, meta_description=?,
+       seo_keywords=?, product_tags=?, key_features=?, vendor_hints=?
+     WHERE id=?`
   ).run(
     name ?? product.name,
     description ?? product.description,
@@ -373,6 +421,14 @@ router.put("/products/:id", (req, res) => {
     price !== undefined ? Number(price) : product.price,
     stock !== undefined ? Number(stock) : product.stock,
     normalizedImageUrl,
+    seo.seo_title,
+    seo.short_description,
+    seo.meta_title,
+    seo.meta_description,
+    seo.seo_keywords,
+    seo.product_tags,
+    seo.key_features,
+    seo.vendor_hints,
     product.id
   );
   const updated = db.prepare("SELECT * FROM products WHERE id = ?").get(product.id);
