@@ -596,7 +596,11 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
   // Build intro based on constraints
   let intro = `Based on the ShopSense catalog, here are the top **${products.length}** product${products.length > 1 ? "s" : ""} matching your inquiry:\n\n`;
 
-  if (constraints.isExpensiveQuery && products.length === 1) {
+  if (
+    constraints.isExpensiveQuery &&
+    !constraints.isCheapestQuery &&
+    products.length === 1
+  ) {
     intro = `The most expensive product matching your query is:\n\n`;
   } else if (constraints.isPopularQuery) {
     const hasPopData = products.some(p => p.unitsSold > 0);
