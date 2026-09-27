@@ -287,6 +287,13 @@ function buildVectorStore() {
   return vectorStore.length;
 }
 
+function getVendorProductCount(vendorId) {
+  return Number(
+    db.prepare("SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?")
+      .get(Number(vendorId)).count
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Retrieve: semantic similarity + hard constraint filtering + ranked results
 // ---------------------------------------------------------------------------
@@ -780,5 +787,6 @@ module.exports = {
   buildVectorStore,
   buildPopularityIndex,
   generateProductDescription,
+  getVendorProductCount,
   getVectorStoreCount: () => vectorStore.length
 };
