@@ -592,7 +592,7 @@ export default function VendorProductForm() {
                   ) : (
                     <ImageUp size={32} style={{ color: "var(--ink-soft)" }} />
                   )}
-                </details>
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold mb-1">
                     {form.imageUrl ? "Image uploaded" : "Drop your product image here"}
@@ -635,7 +635,7 @@ export default function VendorProductForm() {
               />
             </div>
           </div>
-        </div>
+        </details>
 
         {/* Submit Button */}
         <div
