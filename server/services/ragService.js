@@ -610,13 +610,16 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
   const items = products.map((p, idx) => {
     const stockStatus = p.stock > 0 ? `In Stock (${p.stock} units)` : "Out of Stock";
     const popNote = p.unitsSold > 0 ? `\n  - **Popularity:** ${p.unitsSold.toLocaleString("en-IN")} units sold historically` : "";
+    const description = isGenericCatalogDescription(p.description)
+      ? ""
+      : `\n  - ${p.description}`;
     return (
       `**${idx + 1}. ${p.name}**\n` +
       `  - **Category:** ${p.category}\n` +
       `  - **Price:** ₹${p.price.toLocaleString("en-IN")}\n` +
       `  - **Stock:** ${stockStatus}\n` +
       `  - **Vendor:** ${p.vendor}\n` +
-      `  - ${p.description}${popNote}`
+      `${description}${popNote}`
     );
   }).join("\n\n");
 

@@ -114,6 +114,7 @@ function isGenericCatalogDescription(description) {
   return (
     /^shopsense catalog product in \w+(?: \w+)?$/.test(text) ||
     /^shopsense marketplace catalog product(?: in \w+(?: \w+)?)?$/.test(text) ||
+    /^[a-z0-9 ]+ is a product designed for its intended everyday purpose it is a suitable choice when you need a product for this purpose in the [a-z0-9 ]+ category review the listing details to confirm the specifications and compatibility you need$/.test(text) ||
     /^(?:a|an) (?:product|item) designed for everyday use$/.test(text) ||
     /^(?:a|an) (?:electronics|audio|computing|wearable|home|fashion|food) product designed for everyday(?: [a-z]+)? use$/.test(text)
   );
