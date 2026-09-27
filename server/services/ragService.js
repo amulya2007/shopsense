@@ -780,8 +780,14 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
   // 1. Retrieve products (filtered by vendorId if provided)
   const { products, constraints, constraintsMissed } = retrieveProducts(trimmedQuery, 6, convContext, vendorId);
 
-  // 2. Generate grounded response
-  const answer = await generateLlmResponse(trimmedQuery, products, constraints, constraintsMissed);
+  // Keep catalog answers deterministic and grounded in retrieved live records.
+  // The free-form LLM response was adding unsupported details to some products.
+  const answer = formatGroundedFallbackResponse(
+    trimmedQuery,
+    products,
+    constraints,
+    constraintsMissed
+  );
 
   // 3. Source citations
   const sources = products.map((p) => ({
