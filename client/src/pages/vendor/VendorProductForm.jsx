@@ -545,8 +545,12 @@ export default function VendorProductForm() {
         </div>
 
         {/* Media Section */}
-        <div className="rounded-xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-          <div className="flex items-center gap-2 mb-5 pb-4" style={{ borderBottom: "1px solid var(--border)" }}>
+        <details
+          className="rounded-xl p-6"
+          style={{ background: "var(--card)", border: "1px solid var(--border)" }}
+          defaultOpen={isEdit}
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-2 pb-4">
             <div 
               className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ background: "var(--success)", color: "white" }}
@@ -555,9 +559,11 @@ export default function VendorProductForm() {
             </div>
             <div>
               <h2 className="font-semibold text-base">Product Media</h2>
-              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Add images to showcase your product</p>
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                {form.imageUrl ? "Product image added" : "Optional — add an image to showcase your product"}
+              </p>
             </div>
-          </div>
+          </summary>
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
@@ -586,7 +592,7 @@ export default function VendorProductForm() {
                   ) : (
                     <ImageUp size={32} style={{ color: "var(--ink-soft)" }} />
                   )}
-                </div>
+                </details>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold mb-1">
                     {form.imageUrl ? "Image uploaded" : "Drop your product image here"}
