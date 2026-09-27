@@ -805,9 +805,12 @@ Return ONLY the description text.`;
 }
 
 function cleanSeoText(value, maxLength) {
-  return typeof value === "string"
-    ? value.replace(/\s+/g, " ").trim().slice(0, maxLength)
-    : "";
+  if (typeof value !== "string") return "";
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= maxLength) return cleaned;
+  const shortened = cleaned.slice(0, maxLength + 1);
+  const boundary = shortened.lastIndexOf(" ");
+  return (boundary > 0 ? shortened.slice(0, boundary) : shortened.slice(0, maxLength)).trimEnd();
 }
 
 function cleanSeoList(value, maxItems, maxLength) {
