@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ImageUp, Sparkles, Loader2, AlertCircle, Package, DollarSign, Archive, Image as ImageIcon } from "lucide-react";
+import { ImageUp, Sparkles, Loader2, AlertCircle, Package, DollarSign, Image as ImageIcon } from "lucide-react";
 import api from "../../lib/api";
 import ProductImage from "../../components/ProductImage";
 

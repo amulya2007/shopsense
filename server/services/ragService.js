@@ -420,21 +420,17 @@ function retrieveProducts(
   // Sort valid by similarity descending
   valid.sort((a, b) => b.similarity - a.similarity);
 
-  // ---- Secondary sort within top candidates ----
-  // When a category constraint exists AND cheapest/expensive are requested,
-  // first narrow to that category then sort by price so we don't mix categories.
-  let candidatePool = valid.slice(0, Math.max(topK * 4, 30));
+  // Ranking intents must sort the complete eligible vendor result set before
+  // taking topK; sorting only the semantic top-30 can miss the true extrema.
+  const needsFullRanking =
+    constraints.isCheapestQuery ||
+    constraints.isExpensiveQuery ||
+    constraints.isPopularQuery;
+  let candidatePool = needsFullRanking
+    ? valid
+    : valid.slice(0, Math.max(topK * 4, 30));
 
   if (constraints.isCheapestQuery || constraints.isExpensiveQuery) {
-    // If a category was specified, prefer category-matching candidates
-    if (constraints.targetCategory) {
-      const catMatches = candidatePool.filter(
-        c => c.doc.category.toLowerCase().includes(constraints.targetCategory)
-      );
-      if (catMatches.length >= topK) {
-        candidatePool = catMatches;
-      }
-    }
     if (constraints.isCheapestQuery) {
       candidatePool.sort((a, b) => a.doc.price - b.doc.price);
     } else {
