@@ -374,7 +374,7 @@ function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = 
       similarity += doc.popularityScore * 0.5;
     }
 
-    return { doc, similarity, hardPenalty };
+    return { doc, similarity, hardPenalty, overlap };
   });
 
   // ---- Apply hard constraints strictly ----
@@ -384,6 +384,23 @@ function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = 
     // An explicit product type is a hard relevance boundary. Never fill
     // missing matches with unrelated products.
     valid = typed;
+  }
+  const hasCatalogIntent =
+    constraints.maxPrice !== null ||
+    constraints.minPrice !== null ||
+    constraints.mustBeInStock ||
+    constraints.mustBeOutOfStock ||
+    constraints.targetCategory !== null ||
+    constraints.isCheapestQuery ||
+    constraints.isExpensiveQuery ||
+    constraints.isPopularQuery ||
+    Boolean(queryIdentity.type);
+  const isCatalogBrowse = /\b(show|list|browse|display)\b[\s\S]{0,30}\b(products?|items?|catalog|options?)\b|\bwhat do you sell\b|\bwhat products do you have\b|\byour products\b/i.test(fullQuery);
+
+  // When a question has no recognized catalog intent, require at least one
+  // actual word match instead of returning arbitrary nearest neighbors.
+  if (!hasCatalogIntent && !isCatalogBrowse) {
+    valid = valid.filter((item) => item.overlap > 0);
   }
   const disqualified = scored.filter(s => s.hardPenalty > 0);
 
@@ -774,6 +791,10 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
   }
 
   const trimmedQuery = question.trim();
+  if (/^(hello|hi|hey|greetings|good\s+(morning|afternoon|evening)|howdy)\b/i.test(trimmedQuery)) {
+    return { answer: "Hello! What products or category would you like to explore?", products: [], sources: [] };
+  }
+
   // Build lightweight context from prior conversation
   const convContext = buildConversationContext(trimmedQuery, conversationHistory);
 
