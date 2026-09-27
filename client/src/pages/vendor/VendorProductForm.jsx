@@ -63,7 +63,9 @@ export default function VendorProductForm() {
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [generatingDescription, setGeneratingDescription] = useState(false);
   const [generatingSeo, setGeneratingSeo] = useState(false);
+  const [descriptionError, setDescriptionError] = useState("");
   const [seoError, setSeoError] = useState("");
   const [seoProvider, setSeoProvider] = useState("");
   const blurTimeout = useRef(null);
@@ -107,11 +109,34 @@ export default function VendorProductForm() {
     }
   };
 
-  const handleGenerateSeoContent = async () => {
+  const handleGenerateDescription = async () => {
     const name = form.name.trim();
     const category = form.category.trim();
     if (!name || !category) {
-      setSeoError("Enter a product name and category first, then generate SEO content.");
+      setDescriptionError("Enter a product name and category first.");
+      return;
+    }
+    setDescriptionError("");
+    setGeneratingDescription(true);
+    try {
+      const res = await api.post("/ai/generate-description", {
+        name,
+        category,
+        hints: form.vendorHints
+      });
+      setForm((prev) => ({ ...prev, description: res.data.description || "" }));
+    } catch (err) {
+      setDescriptionError(err.response?.data?.error || "Unable to generate a description. Please try again.");
+    } finally {
+      setGeneratingDescription(false);
+    }
+  };
+
+  const handleGenerateSeoFields = async () => {
+    const name = form.name.trim();
+    const category = form.category.trim();
+    if (!name || !category) {
+      setSeoError("Enter a product name and category first.");
       return;
     }
     setSeoError("");
@@ -126,7 +151,6 @@ export default function VendorProductForm() {
       setForm((prev) => ({
         ...prev,
         seoTitle: res.data.seoTitle || "",
-        description: res.data.description || "",
         shortDescription: res.data.shortDescription || "",
         metaTitle: res.data.metaTitle || "",
         metaDescription: res.data.metaDescription || "",
@@ -325,35 +349,21 @@ export default function VendorProductForm() {
               </p>
             </div>
 
-            <div className="lg:col-span-2">
-              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-soft)" }}>
-                Vendor Hints
-              </label>
-              <textarea
-                rows={3}
-                value={form.vendorHints}
-                onChange={(e) => setForm((prev) => ({ ...prev, vendorHints: e.target.value }))}
-                placeholder="Add verified product details, materials, use cases, or features for the SEO content."
-                className="w-full px-4 py-3 rounded-lg text-sm focus-ring resize-y"
-                style={{ border: "1px solid var(--border)" }}
-              />
-            </div>
-
-            {/* Description with AI */}
+            {/* Product description */}
             <div className="lg:col-span-2">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-                  SEO-Optimized Description <span style={{ color: "var(--danger)" }}>*</span>
+                  Product Description <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
                 <button
                   type="button"
-                  onClick={handleGenerateSeoContent}
-                  disabled={generatingSeo || !form.name.trim() || !form.category.trim()}
+                  onClick={handleGenerateDescription}
+                  disabled={generatingDescription || !form.name.trim() || !form.category.trim()}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                   style={{ background: "var(--primary)", color: "white" }}
-                  title={!form.name.trim() || !form.category.trim() ? "Enter product name and category first" : "Generate all SEO fields"}
+                  title={!form.name.trim() || !form.category.trim() ? "Enter product name and category first" : "Generate an editable AI description"}
                 >
-                  {generatingSeo ? (
+                  {generatingDescription ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
                       Generating…
@@ -361,7 +371,7 @@ export default function VendorProductForm() {
                   ) : (
                     <>
                       <Sparkles size={14} />
-                      Generate SEO content
+                      Generate AI description
                     </>
                   )}
                 </button>
@@ -370,18 +380,18 @@ export default function VendorProductForm() {
                 required
                 rows={4}
                 value={form.description}
-                onChange={(e) => { setForm({ ...form, description: e.target.value }); setSeoError(""); }}
-                placeholder="SEO-optimized product description"
+                onChange={(e) => { setForm({ ...form, description: e.target.value }); setDescriptionError(""); }}
+                placeholder="Describe your product and its verified details"
                 className="w-full px-4 py-3 rounded-lg text-sm focus-ring resize-none"
                 style={{ border: "1px solid var(--border)" }}
               />
               <p className="mt-1 text-xs" style={{ color: "var(--ink-soft)" }}>
-                Generated content is based on your product details and hints. Edit any field before saving.
+                The description is editable. Add verified product details under advanced SEO fields to guide generation.
               </p>
-              {seoError && (
+              {descriptionError && (
                 <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
                   <AlertCircle size={12} />
-                  {seoError}
+                  {descriptionError}
                 </p>
               )}
             </div>
@@ -428,6 +438,38 @@ export default function VendorProductForm() {
                 Advanced SEO fields
               </summary>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 pt-1">
+                <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                    Optional fields for search previews, tags, and product details.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleGenerateSeoFields}
+                    disabled={generatingSeo || !form.name.trim() || !form.category.trim()}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                    style={{ border: "1px solid var(--border)", color: "var(--primary)" }}
+                  >
+                    {generatingSeo ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {generatingSeo ? "Generating SEO fields…" : "Generate SEO fields"}
+                  </button>
+                </div>
+                <label className="block text-xs font-semibold uppercase tracking-wide lg:col-span-2" style={{ color: "var(--ink-soft)" }}>
+                  Verified product hints
+                  <textarea
+                    rows={2}
+                    value={form.vendorHints}
+                    onChange={(e) => setForm((prev) => ({ ...prev, vendorHints: e.target.value }))}
+                    placeholder="Only add true details: materials, uses, dimensions, included parts, etc."
+                    className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                    style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+                  />
+                </label>
+                {seoError && (
+                  <p className="lg:col-span-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--danger)" }}>
+                    <AlertCircle size={12} />
+                    {seoError}
+                  </p>
+                )}
                 <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
                   Meta Title
                   <input
