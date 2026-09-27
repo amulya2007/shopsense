@@ -157,8 +157,9 @@ function extractQueryConstraints(query) {
     q.includes("cheapest") || q.includes("lowest price") || q.includes("least expensive") ||
     q.includes("most affordable") || q.includes("budget") || q.includes("cheap");
   const isExpensiveQuery =
-    q.includes("most expensive") || q.includes("highest price") || q.includes("premium") ||
-    q.includes("luxury") || q.includes("top of the range");
+    q.includes("expensive") || q.includes("costly") || q.includes("most expensive") ||
+    q.includes("highest price") || q.includes("premium") || q.includes("luxury") ||
+    q.includes("top of the range");
 
   // Popularity intent
   const isPopularQuery =
@@ -297,7 +298,13 @@ function getVendorProductCount(vendorId) {
 // ---------------------------------------------------------------------------
 // Retrieve: semantic similarity + hard constraint filtering + ranked results
 // ---------------------------------------------------------------------------
-function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = null) {
+function retrieveProducts(
+  query,
+  topK = 6,
+  conversationContext = "",
+  vendorId = null,
+  excludedProductIds = []
+) {
   if (!isInitialized || vectorStore.length === 0) buildVectorStore();
 
   // Merge conversation context for better follow-up understanding
@@ -311,6 +318,10 @@ function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = 
   let productsToSearch = vectorStore;
   if (vendorId !== null && vendorId !== undefined) {
     productsToSearch = vectorStore.filter(doc => doc.vendorId === Number(vendorId));
+  }
+  if (excludedProductIds.length > 0) {
+    const excluded = new Set(excludedProductIds.map(String));
+    productsToSearch = productsToSearch.filter(doc => !excluded.has(doc.id));
   }
 
   // ---- Score every document ----
@@ -648,18 +659,16 @@ function buildConversationContext(question, history = []) {
   );
   if (!isFollowUp) return "";
 
-  // Accept last 2 AI messages' product lists as context hints
-  const recent = history.slice(-2);
-  const mentions = [];
-  recent.forEach((turn) => {
-    if (turn.role === "assistant" && Array.isArray(turn.products)) {
-      turn.products.slice(0, 3).forEach(p => {
-        if (p.name) mentions.push(p.name);
-        if (p.category) mentions.push(p.category);
-      });
-    }
-  });
-  return mentions.join(" ");
+  const recentTurn = history.slice(-1)[0];
+  if (recentTurn?.role !== "assistant" || !Array.isArray(recentTurn.products)) return "";
+
+  const categories = [...new Set(
+    recentTurn.products
+      .map(product => String(product.category || "").trim())
+      .filter(Boolean)
+      .map(category => category.toLowerCase())
+  )];
+  return categories.length === 1 ? categories[0] : "";
 }
 
 function retrieveRelevantContext(productName, category = "", topK = 4) {
@@ -800,9 +809,27 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
 
   // Build lightweight context from prior conversation
   const convContext = buildConversationContext(trimmedQuery, conversationHistory);
+  const isMoreQuery = /\bmore\b|\banother\b|\bother options?\b|\badditional\b/i.test(trimmedQuery);
+  const previouslyShownIds = isMoreQuery
+    ? conversationHistory.flatMap(turn =>
+      turn.role === "assistant" && Array.isArray(turn.products)
+        ? turn.products.map(product => product.id).filter(id => id !== undefined && id !== null)
+        : []
+    )
+    : [];
+  const isSingleTopResultQuery =
+    /\b(most|highest|costliest|priciest)\b/i.test(trimmedQuery) &&
+    /\b(product|item|option)\b/i.test(trimmedQuery);
+  const topK = isSingleTopResultQuery ? 1 : 6;
 
   // 1. Retrieve products (filtered by vendorId if provided)
-  const { products, constraints, constraintsMissed } = retrieveProducts(trimmedQuery, 6, convContext, vendorId);
+  const { products, constraints, constraintsMissed } = retrieveProducts(
+    trimmedQuery,
+    topK,
+    convContext,
+    vendorId,
+    previouslyShownIds
+  );
 
   // Keep catalog answers deterministic and grounded in retrieved live records.
   // The free-form LLM response was adding unsupported details to some products.

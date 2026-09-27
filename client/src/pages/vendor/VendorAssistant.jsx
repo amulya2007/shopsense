@@ -98,7 +98,11 @@ export default function VendorAssistant() {
       .slice(-2)
       .map((m) => ({
         role: "assistant",
-        products: m.products.map((p) => ({ name: p.name, category: p.category }))
+        products: m.products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category
+        }))
       }));
   }, []);
 
