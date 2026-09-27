@@ -615,8 +615,17 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
 // ---------------------------------------------------------------------------
 // Lightweight conversation context helper (last 2 exchanges → summary string)
 // ---------------------------------------------------------------------------
-function buildConversationContext(history = []) {
+function buildConversationContext(question, history = []) {
   if (!Array.isArray(history) || history.length === 0) return "";
+
+  // Do not let the previous result's category leak into a new request.
+  // Conversation context is only relevant when the user explicitly refers
+  // back to the previous results.
+  const isFollowUp = /\b(these|those|them|same|more|another|other|cheaper|expensive|similar|instead|what about|how about)\b/i.test(
+    String(question || "")
+  );
+  if (!isFollowUp) return "";
+
   // Accept last 2 AI messages' product lists as context hints
   const recent = history.slice(-2);
   const mentions = [];
@@ -764,7 +773,7 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
 
   const trimmedQuery = question.trim();
   // Build lightweight context from prior conversation
-  const convContext = buildConversationContext(conversationHistory);
+  const convContext = buildConversationContext(trimmedQuery, conversationHistory);
 
   // 1. Retrieve products (filtered by vendorId if provided)
   const { products, constraints, constraintsMissed } = retrieveProducts(trimmedQuery, 6, convContext, vendorId);
