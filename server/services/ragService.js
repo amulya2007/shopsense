@@ -192,17 +192,20 @@ function extractQueryConstraints(query) {
 }
 
 // ---------------------------------------------------------------------------
-// Build popularity index from analytics_order_items
+// Build popularity index from live vendor sales
 // ---------------------------------------------------------------------------
 function buildPopularityIndex() {
   popularityIndex = new Map();
   try {
     const rows = db.prepare(`
-      SELECT product_id,
-             COALESCE(SUM(quantity), 0)          AS unitsSold,
-             COUNT(DISTINCT order_id)             AS orderCount
-      FROM analytics_order_items
-      GROUP BY product_id
+      SELECT p.id AS product_id,
+             COALESCE(SUM(s.quantity), 0) AS unitsSold,
+             COUNT(s.id) AS orderCount
+      FROM products p
+      LEFT JOIN sales s
+        ON s.product_id = p.id
+       AND s.vendor_id = p.vendor_id
+      GROUP BY p.id
     `).all();
     rows.forEach((r) => {
       popularityIndex.set(String(r.product_id), {
@@ -414,8 +417,6 @@ function retrieveProducts(
   if (!hasCatalogIntent && !isCatalogBrowse) {
     valid = valid.filter((item) => item.overlap > 0);
   }
-  const disqualified = scored.filter(s => s.hardPenalty > 0);
-
   // Sort valid by similarity descending
   valid.sort((a, b) => b.similarity - a.similarity);
 
@@ -445,18 +446,6 @@ function retrieveProducts(
   }
 
   const results = candidatePool.slice(0, topK).map(item => item.doc);
-
-  // If ZERO valid results exist, surface a small number of disqualified ones
-  // (so the LLM can explain why nothing matched rather than returning empty)
-  if (
-    results.length === 0 &&
-    disqualified.length > 0 &&
-    !constraints.targetCategory
-  ) {
-    disqualified.sort((a, b) => b.similarity - a.similarity);
-    const fallback = disqualified.slice(0, 3).map(s => s.doc);
-    return { products: fallback, constraints, constraintsMissed: true };
-  }
 
   return { products: results, constraints, constraintsMissed: false };
 }

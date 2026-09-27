@@ -239,7 +239,7 @@ router.get("/products", (req, res) => {
   res.json(products);
 });
 
-// Name suggestions for autocomplete (searches vendor catalog AND the 10,000 dataset products)
+// Name suggestions are limited to the authenticated vendor's current catalog.
 router.get("/products/suggestions", (req, res) => {
   const q = (req.query.q || "").toLowerCase().trim();
   if (!q) return res.json([]);
@@ -248,21 +248,7 @@ router.get("/products/suggestions", (req, res) => {
     .prepare("SELECT DISTINCT name, category, price, stock, 'catalog' AS origin FROM products WHERE vendor_id = ? AND lower(name) LIKE ? LIMIT 5")
     .all(req.user.id, `%${q}%`);
 
-  const datasetRows = db
-    .prepare("SELECT product_id, product_name AS name, category, price, stock, 'dataset' AS origin FROM analytics_products WHERE lower(product_name) LIKE ? OR lower(product_id) LIKE ? LIMIT 8")
-    .all(`%${q}%`, `%${q}%`);
-
-  const combined = [...vendorRows, ...datasetRows];
-  const seen = new Set();
-  const unique = [];
-  for (const item of combined) {
-    if (!seen.has(item.name.toLowerCase())) {
-      seen.add(item.name.toLowerCase());
-      unique.push(item);
-    }
-  }
-
-  res.json(unique.slice(0, 10));
+  res.json(vendorRows);
 });
 
 // Live inventory for the current vendor's catalog. Historical analytics live

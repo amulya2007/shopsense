@@ -423,63 +423,70 @@ export default function VendorProductForm() {
                 style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
               />
             </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-              Meta Title
-              <input
-                value={form.metaTitle}
-                onChange={(e) => setForm((prev) => ({ ...prev, metaTitle: e.target.value }))}
-                maxLength={160}
-                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring"
-                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
-              />
-            </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-              Meta Description
-              <textarea
-                rows={2}
-                value={form.metaDescription}
-                onChange={(e) => setForm((prev) => ({ ...prev, metaDescription: e.target.value }))}
-                maxLength={320}
-                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
-                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
-              />
-            </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-              SEO Keywords
-              <textarea
-                rows={2}
-                value={form.seoKeywords}
-                onChange={(e) => setForm((prev) => ({ ...prev, seoKeywords: e.target.value }))}
-                maxLength={1000}
-                placeholder="Comma-separated keywords"
-                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
-                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
-              />
-            </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
-              Product Tags
-              <textarea
-                rows={2}
-                value={form.productTags}
-                onChange={(e) => setForm((prev) => ({ ...prev, productTags: e.target.value }))}
-                maxLength={1000}
-                placeholder="Comma-separated tags"
-                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
-                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
-              />
-            </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide lg:col-span-2" style={{ color: "var(--ink-soft)" }}>
-              Key Features
-              <textarea
-                rows={4}
-                value={form.keyFeatures}
-                onChange={(e) => setForm((prev) => ({ ...prev, keyFeatures: e.target.value }))}
-                maxLength={2000}
-                placeholder="One feature per line"
-                className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
-                style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
-              />
-            </label>
+            <details className="lg:col-span-2 rounded-lg" style={{ border: "1px solid var(--border)" }}>
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                Advanced SEO fields
+              </summary>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 pt-1">
+                <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+                  Meta Title
+                  <input
+                    value={form.metaTitle}
+                    onChange={(e) => setForm((prev) => ({ ...prev, metaTitle: e.target.value }))}
+                    maxLength={160}
+                    className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring"
+                    style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+                  Meta Description
+                  <textarea
+                    rows={2}
+                    value={form.metaDescription}
+                    onChange={(e) => setForm((prev) => ({ ...prev, metaDescription: e.target.value }))}
+                    maxLength={320}
+                    className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                    style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+                  SEO Keywords
+                  <textarea
+                    rows={2}
+                    value={form.seoKeywords}
+                    onChange={(e) => setForm((prev) => ({ ...prev, seoKeywords: e.target.value }))}
+                    maxLength={1000}
+                    placeholder="Comma-separated keywords"
+                    className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                    style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-soft)" }}>
+                  Product Tags
+                  <textarea
+                    rows={2}
+                    value={form.productTags}
+                    onChange={(e) => setForm((prev) => ({ ...prev, productTags: e.target.value }))}
+                    maxLength={1000}
+                    placeholder="Comma-separated tags"
+                    className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                    style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide lg:col-span-2" style={{ color: "var(--ink-soft)" }}>
+                  Key Features
+                  <textarea
+                    rows={4}
+                    value={form.keyFeatures}
+                    onChange={(e) => setForm((prev) => ({ ...prev, keyFeatures: e.target.value }))}
+                    maxLength={2000}
+                    placeholder="One feature per line"
+                    className="mt-2 w-full px-4 py-3 rounded-lg text-sm font-normal normal-case focus-ring resize-y"
+                    style={{ border: "1px solid var(--border)", color: "var(--ink)" }}
+                  />
+                </label>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -625,7 +632,10 @@ export default function VendorProductForm() {
         </div>
 
         {/* Submit Button */}
-        <div className="flex gap-3">
+        <div
+          className="sticky bottom-0 z-10 flex gap-3 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6"
+          style={{ background: "var(--card)", borderTop: "1px solid var(--border)" }}
+        >
           <button
             type="button"
             onClick={() => navigate("/vendor/catalog")}
