@@ -352,7 +352,7 @@ function retrieveProducts(
       similarity -= 1.5;
     }
 
-    // ---- Hard constraint PENALTIES (will push disqualified items to bottom) ----
+    // ---- Hard constraints: products that violate them are excluded below ----
     let hardPenalty = 0;
 
     if (constraints.maxPrice !== null && doc.price > constraints.maxPrice) {
