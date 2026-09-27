@@ -353,6 +353,12 @@ function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = 
     if (constraints.mustBeOutOfStock && doc.stock > 0) {
       hardPenalty += 10; // disqualify
     }
+    if (
+      constraints.targetCategory &&
+      !doc.category.toLowerCase().includes(constraints.targetCategory)
+    ) {
+      hardPenalty += 10; // category queries must not mix unrelated categories
+    }
 
     // ---- Soft boosts ----
     if (constraints.targetCategory) {
@@ -411,7 +417,11 @@ function retrieveProducts(query, topK = 6, conversationContext = "", vendorId = 
 
   // If ZERO valid results exist, surface a small number of disqualified ones
   // (so the LLM can explain why nothing matched rather than returning empty)
-  if (results.length === 0 && disqualified.length > 0) {
+  if (
+    results.length === 0 &&
+    disqualified.length > 0 &&
+    !constraints.targetCategory
+  ) {
     disqualified.sort((a, b) => b.similarity - a.similarity);
     const fallback = disqualified.slice(0, 3).map(s => s.doc);
     return { products: fallback, constraints, constraintsMissed: true };
