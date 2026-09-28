@@ -110,7 +110,7 @@ function extractQueryConstraints(query) {
 
   // Price range: "between 10000 and 30000"
   const rangeMatch = q.match(
-    /(?:between|from)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:and|to|-)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:,\d+)*(?:\.\d+)?)/i
+    /(?:between|from)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:and|to|-)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)/i
   );
   if (rangeMatch) {
     minPrice = parseFloat(rangeMatch[1].replace(/,/g, ""));
@@ -120,7 +120,7 @@ function extractQueryConstraints(query) {
   // Under / below / less than
   if (maxPrice === null) {
     const underMatch = q.match(
-      /(?:under|below|less than|max|budget of|within)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:,\d+)*(?:\.\d+)?)/i
+      /(?:under|below|less than|max|budget of|within)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)/i
     );
     if (underMatch) maxPrice = parseFloat(underMatch[1].replace(/,/g, ""));
   }
@@ -128,7 +128,7 @@ function extractQueryConstraints(query) {
   // Above / more than / at least
   if (minPrice === null) {
     const aboveMatch = q.match(
-      /(?:above|more than|greater than|at least|over|starting from)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:,\d+)*(?:\.\d+)?)/i
+      /(?:above|more than|greater than|at least|over|starting from)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)/i
     );
     if (aboveMatch) minPrice = parseFloat(aboveMatch[1].replace(/,/g, ""));
   }
@@ -136,45 +136,40 @@ function extractQueryConstraints(query) {
   // Bare price number interpreted as max when query has "under"-style words implicit
   // e.g. "electronics 50000" — only if no constraint already captured
   if (maxPrice === null && minPrice === null) {
-    const barePrice = q.match(/(?:₹|rs\.?|inr)\s*(\d{4,6}(?:,\d+)*)/i);
+    const barePrice = q.match(/(?:₹|rs\.?|inr)\s*(\d[\d,]*(?:\.\d+)?)/i);
     if (barePrice) maxPrice = parseFloat(barePrice[1].replace(/,/g, ""));
   }
 
   // Stock status
-  if (
-    q.includes("in stock") || q.includes("available") || q.includes("in-stock") ||
-    q.includes("currently available") || q.includes("right now")
-  ) {
-    mustBeInStock = true;
-  }
-  if (q.includes("out of stock") || q.includes("unavailable") || q.includes("sold out") || q.includes("not available")) {
+  if (/\b(?:not\s+(?:currently\s+)?in[\s-]+stock|out[\s-]+of[\s-]+stock|unavailable|sold[\s-]+out|not\s+available)\b/i.test(q)) {
     mustBeOutOfStock = true;
-    mustBeInStock = false;  // explicit out-of-stock overrides
+  } else if (/\b(?:in[\s-]+stock|available|right now)\b/i.test(q)) {
+    mustBeInStock = true;
   }
 
   // Price ordering intent
   const isCheapestQuery =
-    q.includes("cheapest") || q.includes("lowest price") || q.includes("least expensive") ||
-    q.includes("most affordable") || q.includes("budget") || q.includes("cheap");
+    /\b(?:cheapest|cheaper|lowest[- ]priced?|least expensive|less expensive|most affordable|budget|cheap)\b/i.test(q);
   const isExpensiveQuery =
-    q.includes("expensive") || q.includes("costly") || q.includes("most expensive") ||
-    q.includes("highest price") || q.includes("premium") || q.includes("luxury") ||
-    q.includes("top of the range");
+    /\b(?:expensive|more expensive|costly|costlier|costliest|priciest|highest[- ]priced?|highest price|premium|luxury|top of the range)\b/i.test(q);
 
   // Popularity intent
   const isPopularQuery =
-    q.includes("popular") || q.includes("best selling") || q.includes("best-selling") ||
-    q.includes("top selling") || q.includes("trending") || q.includes("most sold") ||
-    q.includes("most ordered") || q.includes("in demand") || q.includes("bestseller");
+    /\b(?:popular|best[- ]selling|top selling|trending|most sold|most ordered|in demand|bestsellers?)\b/i.test(q);
 
   // Category detection — ordered longest match first to avoid "home" swallowing "home & kitchen"
   const KNOWN_CATEGORIES = [
-    "home & kitchen", "computers", "electronics", "accessories",
-    "wearables", "fashion", "beauty", "sports", "audio", "home"
+    "home & kitchen", "sports & fitness", "computers", "electronics", "accessories",
+    "wearables", "fashion", "beauty", "fitness", "sports", "audio", "home"
   ];
   for (const cat of KNOWN_CATEGORIES) {
-    if (new RegExp(`\\b${cat.replace(/[&]/g, "\\&")}\\b`, "i").test(q)) {
-      targetCategory = cat;
+    const categoryPattern = cat === "home & kitchen"
+      ? /\bhome\s*(?:&|and)\s*kitchen\b/i
+      : cat === "sports & fitness"
+        ? /\bsports?\s*(?:&|and)\s*fitness\b/i
+        : new RegExp(`\\b${cat}\\b`, "i");
+    if (categoryPattern.test(q)) {
+      targetCategory = cat === "sports & fitness" ? "fitness" : cat;
       break;
     }
   }
@@ -189,6 +184,31 @@ function extractQueryConstraints(query) {
     isExpensiveQuery,
     isPopularQuery
   };
+}
+
+function matchesTargetCategory(product, targetCategory) {
+  const category = String(product.category || "").toLowerCase();
+  const searchableText = `${product.name || ""} ${product.description || ""}`.toLowerCase();
+
+  if (targetCategory === "fitness") {
+    return /\bsports?\b/.test(category) || /\b(?:fitness|workout|exercise|yoga)\b/.test(searchableText);
+  }
+  if (targetCategory === "audio") {
+    return /\baudio\b/.test(category) ||
+      /\b(?:headphones?|headsets?|earbuds?|earphones?|speakers?|microphones?|soundbars?)\b/.test(searchableText);
+  }
+  if (targetCategory === "computers") {
+    return /\bcomputers?\b/.test(category) ||
+      /\b(?:laptops?|desktops?|keyboards?|mice|mouse|monitors?|webcams?|printers?|routers?)\b/.test(searchableText);
+  }
+  if (targetCategory === "wearables") {
+    return /\bwearables?\b/.test(category) ||
+      /\b(?:smartwatches?|smart watches?|fitness trackers?|activity trackers?|watches?)\b/.test(searchableText);
+  }
+
+  const normalizedCategory = category.replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedTarget = targetCategory.replace(/[^a-z0-9]+/g, " ").trim();
+  return normalizedCategory.includes(normalizedTarget);
 }
 
 // ---------------------------------------------------------------------------
@@ -367,10 +387,7 @@ function retrieveProducts(
     if (constraints.mustBeOutOfStock && doc.stock > 0) {
       hardPenalty += 10; // disqualify
     }
-    if (
-      constraints.targetCategory &&
-      !doc.category.toLowerCase().includes(constraints.targetCategory)
-    ) {
+    if (constraints.targetCategory && !matchesTargetCategory(doc, constraints.targetCategory)) {
       hardPenalty += 10; // category queries must not mix unrelated categories
     }
 
@@ -378,7 +395,7 @@ function retrieveProducts(
     if (constraints.targetCategory) {
       if (doc.category.toLowerCase() === constraints.targetCategory) {
         similarity += 0.35; // exact match
-      } else if (doc.category.toLowerCase().includes(constraints.targetCategory)) {
+      } else if (matchesTargetCategory(doc, constraints.targetCategory)) {
         similarity += 0.2;  // partial match
       }
     }
@@ -410,7 +427,7 @@ function retrieveProducts(
     constraints.isPopularQuery ||
     Boolean(queryIdentity.type);
   const isCatalogBrowse =
-    /\b(show|list|browse|display)\b[\s\S]{0,30}\b(products?|items?|catalog|options?)\b|\bwhat do you sell\b|\bwhat products do you have\b|\byour products\b|\bmore\b|\banother\b|\bother options?\b|\badditional\b/i.test(fullQuery);
+    /\b(show|list|browse|display)\b[\s\S]{0,30}\b(products?|items?|catalog|options?)\b|\bwhat do you sell\b|\bwhat products do you have\b|\bwhat do you have\b|\byour products\b|\brecommend(?:ation)?s?\b|\bsuggest(?:ion)?s?\b|\bmore\b|\banother\b|\bother options?\b|\badditional\b/i.test(fullQuery);
 
   // When a question has no recognized catalog intent, require at least one
   // actual word match instead of returning arbitrary nearest neighbors.
@@ -603,7 +620,9 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
   } else if (constraints.isExpensiveQuery) {
     intro = `Here are the premium options in the ShopSense catalog matching your query:\n\n`;
   } else if (constraints.targetCategory) {
-    intro = `Here are products from the **${products[0]?.category}** category in the ShopSense catalog:\n\n`;
+    intro = constraints.targetCategory === "fitness"
+      ? `Here are fitness-related products from your ShopSense catalog:\n\n`
+      : `Here are products from the **${products[0]?.category}** category in the ShopSense catalog:\n\n`;
   } else if (constraints.mustBeInStock) {
     intro = `Here are ShopSense catalog products currently in stock:\n\n`;
   } else if (constraints.mustBeOutOfStock) {
