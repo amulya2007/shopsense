@@ -336,7 +336,7 @@ The vector index rebuilds automatically on every:
 - Stock adjustment (`POST /api/vendor/products/:id/stock-adjustments`)
 - Product deletion (`DELETE /api/vendor/products/:id`)
 
-Manual refresh is also available: `POST /api/ai/refresh-index`
+Administrators can refresh all isolated vendor indexes with `POST /api/ai/refresh-index`.
 
 ### Conversation Context
 
@@ -396,9 +396,11 @@ POST /api/ai/shopping-assistant
      Response: { "answer": string, "products": array, "sources": array }
 
 GET  /api/ai/status
+     Requires vendor or admin authentication; vendors see only their own index count.
      Response: { "status", "vectorStoreReady", "indexedProducts", "llmProviderConfigured", "provider" }
 
 POST /api/ai/refresh-index
+     Requires admin authentication; rebuilds vendor indexes independently.
      Response: { "success", "message", "indexedProducts" }
 ```
 
@@ -472,4 +474,3 @@ Interactive docs at `http://localhost:8000/docs`.
 ---
 
 ## All Rights Reserved to AMULYA MUNUGOTI
-

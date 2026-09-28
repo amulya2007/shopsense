@@ -135,6 +135,7 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
     const liveProducts = result.products.filter(
       p => p.origin === "live_catalog" && p.vendorId === vendorId
     );
+    const liveProductIds = new Set(liveProducts.map((product) => String(product.id)));
     const answer = liveProducts.length === 0 &&
       ragService.getVendorProductCount(vendorId) === 0
       ? "Your vendor catalog currently has no products available."
@@ -143,7 +144,7 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
     res.json({
       answer,
       products: liveProducts.slice(0, 6), // Show only catalog products
-      sources:  result.sources
+      sources: result.sources.filter((source) => liveProductIds.has(String(source.productId)))
     });
   } catch (error) {
     console.error("AI Shopping Assistant error:", error);
@@ -155,10 +156,13 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
 
 /**
  * GET /api/ai/status
- * Health & vector index status
+ * Authenticated vendor-scoped vector index status
  */
-router.get("/status", (req, res) => {
-  const count = ragService.getVectorStoreCount();
+router.get("/status", requireAuth(["vendor", "admin"]), (req, res) => {
+  const vendorId = req.user.role === "vendor" ? Number(req.user.id) : null;
+  const count = vendorId === null
+    ? ragService.getVectorStoreCount()
+    : ragService.getVectorStoreCount(vendorId);
   const hasGemini  = Boolean(process.env.GEMINI_API_KEY  && process.env.GEMINI_API_KEY  !== "your_key_here");
   const hasOpenAI  = Boolean(process.env.OPENAI_API_KEY  && process.env.OPENAI_API_KEY  !== "your_key_here");
   const hasLlmKey  = hasGemini || hasOpenAI ||
@@ -177,17 +181,17 @@ router.get("/status", (req, res) => {
 
 /**
  * POST /api/ai/refresh-index
- * Rebuild the vector store from the SQLite database on demand.
- * PUBLIC endpoint - no auth required for development convenience
+ * Rebuild each vendor's isolated vector index.
+ * Restricted to administrators because this refreshes all vendor indexes.
  */
-router.post("/refresh-index", (req, res) => {
+router.post("/refresh-index", requireAuth(["admin"]), (req, res) => {
   try {
     console.log("🔄 Manually refreshing RAG vector store...");
-    const count = ragService.buildVectorStore();
-    console.log(`✅ Vector store refreshed: ${count} products indexed`);
+    const count = ragService.buildAllVectorStores();
+    console.log(`✅ Vendor-scoped vector stores refreshed: ${count} products indexed`);
     res.json({
       success:        true,
-      message:        `Vector store index successfully refreshed with ${count} products.`,
+      message:        `Vendor-scoped vector indexes successfully refreshed with ${count} products.`,
       indexedProducts: count
     });
   } catch (error) {

@@ -325,7 +325,7 @@ function retrieveProducts(
   const constraints = extractQueryConstraints(fullQuery);
   const queryIdentity = extractProductIdentity(fullQuery);
 
-  const productsToSearch = vectorStoresByVendor.get(id);
+  let productsToSearch = vectorStoresByVendor.get(id);
   if (excludedProductIds.length > 0) {
     const excluded = new Set(excludedProductIds.map(String));
     productsToSearch = productsToSearch.filter(doc => !excluded.has(doc.id));
@@ -951,7 +951,7 @@ Return only a JSON object with exactly these keys:
   return { ...fallback, provider: "Local" };
 }
 
-async function answerShoppingQuestion(question, conversationHistory = [], vendorId = null) {
+async function answerShoppingQuestion(question, conversationHistory = [], vendorId) {
   if (!question || typeof question !== "string" || !question.trim()) {
     throw new Error("A valid question string is required.");
   }
@@ -1021,7 +1021,9 @@ module.exports = {
   getVendorProductCount,
   getVectorStoreCount: (vendorId) => {
     if (vendorId !== undefined && vendorId !== null) {
-      return vectorStoresByVendor.get(requireVendorId(vendorId))?.length || 0;
+      const id = requireVendorId(vendorId);
+      if (!vectorStoresByVendor.has(id)) buildVectorStore(id);
+      return vectorStoresByVendor.get(id).length;
     }
     return [...vectorStoresByVendor.values()].reduce((total, store) => total + store.length, 0);
   }

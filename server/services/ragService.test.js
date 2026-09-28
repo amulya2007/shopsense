@@ -6,6 +6,9 @@ const ragService = require("./ragService");
 const demoVendorId = db
   .prepare("SELECT vendor_id FROM products WHERE name = ?")
   .get("Smart Fitness Band")?.vendor_id;
+const otherVendorId = db
+  .prepare("SELECT id FROM vendors WHERE id != ? ORDER BY id LIMIT 1")
+  .get(demoVendorId)?.id;
 
 describe("RAG shopping question retrieval", () => {
   it("recognizes fitness as Sports products and fitness-specific products", () => {
@@ -82,5 +85,73 @@ describe("RAG shopping question retrieval", () => {
 
     assert.ok(products.length > 0);
     assert.ok(products.every((product) => product.price >= 1000 && product.price <= 2000));
+  });
+
+  it("requires a vendor scope instead of searching a shared catalog", () => {
+    assert.throws(
+      () => ragService.retrieveProducts("Show me products", 6),
+      /valid vendor ID is required/i
+    );
+  });
+
+  it("never retrieves another vendor's products", () => {
+    assert.ok(otherVendorId, "the test database must contain a second vendor");
+    const { products } = ragService.retrieveProducts(
+      "Show me products",
+      20,
+      "",
+      otherVendorId
+    );
+
+    assert.ok(products.every((product) => product.vendorId === otherVendorId));
+    assert.ok(!products.some((product) => product.vendorId === demoVendorId));
+  });
+
+  it("keeps two populated vendor indexes isolated", () => {
+    assert.ok(otherVendorId, "the test database must contain a second vendor");
+    const sentinelName = "RAG Isolation Sentinel Camera";
+    const savepoint = "rag_vendor_isolation_test";
+
+    db.exec(`SAVEPOINT ${savepoint}`);
+    try {
+      const inserted = db.prepare(`
+        INSERT INTO products (vendor_id, name, category, price, stock)
+        VALUES (?, ?, 'Electronics', 1234, 5)
+      `).run(otherVendorId, sentinelName);
+      ragService.buildVectorStore(otherVendorId);
+
+      const otherVendorProducts = ragService.retrieveProducts(
+        sentinelName,
+        6,
+        "",
+        otherVendorId
+      ).products;
+      const currentVendorProducts = ragService.retrieveProducts(
+        sentinelName,
+        6,
+        "",
+        demoVendorId
+      ).products;
+
+      assert.ok(otherVendorProducts.some((product) => product.id === String(inserted.lastInsertRowid)));
+      assert.ok(currentVendorProducts.every((product) => product.id !== String(inserted.lastInsertRowid)));
+    } finally {
+      db.exec(`ROLLBACK TO ${savepoint}`);
+      db.exec(`RELEASE ${savepoint}`);
+      ragService.buildVectorStore(otherVendorId);
+    }
+  });
+
+  it("keeps vendor vector-store counts separate", () => {
+    assert.ok(otherVendorId, "the test database must contain a second vendor");
+    const ownCount = db
+      .prepare("SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?")
+      .get(demoVendorId).count;
+    const otherCount = db
+      .prepare("SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?")
+      .get(otherVendorId).count;
+
+    assert.equal(ragService.getVectorStoreCount(demoVendorId), ownCount);
+    assert.equal(ragService.getVectorStoreCount(otherVendorId), otherCount);
   });
 });
