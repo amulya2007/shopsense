@@ -11,12 +11,7 @@ const {
 // ---------------------------------------------------------------------------
 // In-memory Vector Store
 // ---------------------------------------------------------------------------
-let vectorStore = [];
-let isInitialized = false;
-
-// Popularity index: productId (string) -> { unitsSold, orderCount }
-// Built once from analytics_order_items alongside the vector store.
-let popularityIndex = new Map();
+const vectorStoresByVendor = new Map();
 
 // ---------------------------------------------------------------------------
 // Stopwords
@@ -212,109 +207,101 @@ function matchesTargetCategory(product, targetCategory) {
 }
 
 // ---------------------------------------------------------------------------
-// Build popularity index from live vendor sales
+// Build popularity index from one vendor's live sales
 // ---------------------------------------------------------------------------
-function buildPopularityIndex() {
-  popularityIndex = new Map();
-  try {
-    const rows = db.prepare(`
-      SELECT p.id AS product_id,
-             COALESCE(SUM(s.quantity), 0) AS unitsSold,
-             COUNT(s.id) AS orderCount
-      FROM products p
-      LEFT JOIN sales s
-        ON s.product_id = p.id
-       AND s.vendor_id = p.vendor_id
-      GROUP BY p.id
-    `).all();
-    rows.forEach((r) => {
-      popularityIndex.set(String(r.product_id), {
-        unitsSold:  Number(r.unitsSold),
-        orderCount: Number(r.orderCount)
-      });
-    });
-    console.log(`[RAG] Popularity index built: ${popularityIndex.size} products with sales data.`);
-  } catch (err) {
-    console.warn("[RAG] Could not build popularity index:", err.message);
+function requireVendorId(vendorId) {
+  const id = Number(vendorId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("A valid vendor ID is required for catalog retrieval.");
   }
+  return id;
+}
+
+function buildPopularityIndex(vendorId) {
+  const id = requireVendorId(vendorId);
+  const rows = db.prepare(`
+    SELECT p.id AS product_id,
+           COALESCE(SUM(s.quantity), 0) AS unitsSold,
+           COUNT(s.id) AS orderCount
+    FROM products p
+    LEFT JOIN sales s
+      ON s.product_id = p.id
+     AND s.vendor_id = p.vendor_id
+    WHERE p.vendor_id = ?
+    GROUP BY p.id
+  `).all(id);
+  const popularityIndex = new Map();
+  rows.forEach((row) => {
+    popularityIndex.set(String(row.product_id), {
+      unitsSold: Number(row.unitsSold),
+      orderCount: Number(row.orderCount)
+    });
+  });
+  return popularityIndex;
 }
 
 // ---------------------------------------------------------------------------
 // Build / refresh the vector store from SQLite
 // ---------------------------------------------------------------------------
-function buildVectorStore() {
+function buildVectorStore(vendorId) {
+  const id = requireVendorId(vendorId);
   const documents = [];
 
-  // 1. Live vendor products
-  try {
-    const liveProducts = db.prepare(`
-      SELECT p.id, p.vendor_id, p.name, p.description, p.category, p.price, p.stock, p.image_url,
-             v.business_name AS vendor_name
-      FROM products p
-      LEFT JOIN vendors v ON p.vendor_id = v.id
-    `).all();
+  const liveProducts = db.prepare(`
+    SELECT p.id, p.vendor_id, p.name, p.description, p.category, p.price, p.stock, p.image_url,
+           v.business_name AS vendor_name
+    FROM products p
+    LEFT JOIN vendors v ON p.vendor_id = v.id
+    WHERE p.vendor_id = ?
+  `).all(id);
 
-    console.log(`[RAG] Indexing ${liveProducts.length} live catalog products...`);
-
-    liveProducts.forEach((p) => {
-      const identity = extractProductIdentity(p.name);
-      const textContent = `${p.name} ${p.name} ${identity.type || ""} ${p.description || ""} Category: ${p.category} Vendor: ${p.vendor_name || "Verified Vendor"} Price: ₹${p.price} Stock: ${p.stock} units`;
-      const vector = generateVector(textContent, p.category, p.price);
-      documents.push({
-        id: String(p.id),
-        vendorId: Number(p.vendor_id),
-        name: p.name,
-        description: p.description || "",
-        category: p.category,
-        price: Number(p.price),
-        stock: Number(p.stock),
-        vendor: p.vendor_name || "Verified Vendor",
-        imageUrl: p.image_url || "",
-        origin: "live_catalog",
-        textContent,
-        vector
-      });
+  liveProducts.forEach((product) => {
+    const identity = extractProductIdentity(product.name);
+    const textContent = `${product.name} ${product.name} ${identity.type || ""} ${product.description || ""} Category: ${product.category} Vendor: ${product.vendor_name || "Verified Vendor"} Price: ₹${product.price} Stock: ${product.stock} units`;
+    documents.push({
+      id: String(product.id),
+      vendorId: Number(product.vendor_id),
+      name: product.name,
+      description: product.description || "",
+      category: product.category,
+      price: Number(product.price),
+      stock: Number(product.stock),
+      vendor: product.vendor_name || "Verified Vendor",
+      imageUrl: product.image_url || "",
+      origin: "live_catalog",
+      textContent,
+      vector: generateVector(textContent, product.category, product.price)
     });
-    
-    if (liveProducts.length > 0) {
-      console.log(`[RAG] Sample live products:`, liveProducts.slice(0, 3).map(p => ({
-        id: p.id,
-        name: p.name,
-        category: p.category
-      })));
-    }
-  } catch (err) {
-    console.error("[RAG] Error reading live products:", err);
-  }
+  });
 
-  // Dataset products REMOVED - Only show catalog products in AI Assistant
+  const popularityIndex = buildPopularityIndex(id);
 
-  vectorStore = documents;
-  isInitialized = true;
-
-  // Rebuild popularity alongside products
-  buildPopularityIndex();
-
-  // Compute max popularity for normalisation
   let maxUnits = 1;
   popularityIndex.forEach((v) => { if (v.unitsSold > maxUnits) maxUnits = v.unitsSold; });
 
-  // Attach normalised popularity scores to documents
-  vectorStore.forEach((doc) => {
+  documents.forEach((doc) => {
     const pop = popularityIndex.get(doc.id);
     doc.popularityScore = pop ? pop.unitsSold / maxUnits : 0;
-    doc.unitsSold       = pop ? pop.unitsSold : 0;
-    doc.orderCount      = pop ? pop.orderCount : 0;
+    doc.unitsSold = pop ? pop.unitsSold : 0;
+    doc.orderCount = pop ? pop.orderCount : 0;
   });
 
-  console.log(`[RAG Vector Store] Indexed ${vectorStore.length} products.`);
-  return vectorStore.length;
+  vectorStoresByVendor.set(id, documents);
+  console.log(`[RAG Vector Store] Indexed ${documents.length} products for vendor ${id}.`);
+  return documents.length;
+}
+
+function buildAllVectorStores() {
+  vectorStoresByVendor.clear();
+  const vendorIds = db.prepare("SELECT id FROM vendors ORDER BY id").all();
+  return vendorIds.reduce((total, vendor) => total + buildVectorStore(vendor.id), 0);
 }
 
 function getVendorProductCount(vendorId) {
+  const id = requireVendorId(vendorId);
   return Number(
     db.prepare("SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?")
-      .get(Number(vendorId)).count
+      .get(id).count
   );
 }
 
@@ -325,10 +312,11 @@ function retrieveProducts(
   query,
   topK = 6,
   conversationContext = "",
-  vendorId = null,
+  vendorId,
   excludedProductIds = []
 ) {
-  if (!isInitialized || vectorStore.length === 0) buildVectorStore();
+  const id = requireVendorId(vendorId);
+  if (!vectorStoresByVendor.has(id)) buildVectorStore(id);
 
   // Merge conversation context for better follow-up understanding
   const fullQuery = conversationContext ? `${conversationContext} ${query}` : query;
@@ -337,11 +325,7 @@ function retrieveProducts(
   const constraints = extractQueryConstraints(fullQuery);
   const queryIdentity = extractProductIdentity(fullQuery);
 
-  // Filter by vendorId if provided (for vendor-specific queries)
-  let productsToSearch = vectorStore;
-  if (vendorId !== null && vendorId !== undefined) {
-    productsToSearch = vectorStore.filter(doc => doc.vendorId === Number(vendorId));
-  }
+  const productsToSearch = vectorStoresByVendor.get(id);
   if (excludedProductIds.length > 0) {
     const excluded = new Set(excludedProductIds.map(String));
     productsToSearch = productsToSearch.filter(doc => !excluded.has(doc.id));
@@ -682,10 +666,11 @@ function buildConversationContext(question, history = []) {
   return categories.length === 1 ? categories[0] : "";
 }
 
-function retrieveRelevantContext(productName, category = "", topK = 4) {
-  if (!isInitialized || vectorStore.length === 0) buildVectorStore();
+function retrieveRelevantContext(productName, category = "", topK = 4, vendorId) {
+  const id = requireVendorId(vendorId);
+  if (!vectorStoresByVendor.has(id)) buildVectorStore(id);
   const queryIdentity = extractProductIdentity(productName, category);
-  const ranked = vectorStore
+  const ranked = vectorStoresByVendor.get(id)
     .filter((doc) => isRelevantRetrievedProduct(productName, category, doc))
     .map((doc) => {
       const typeBoost = queryIdentity.type && extractProductIdentity(doc.name, doc.category).type === queryIdentity.type ? 0.5 : 0;
@@ -970,6 +955,7 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
   if (!question || typeof question !== "string" || !question.trim()) {
     throw new Error("A valid question string is required.");
   }
+  const id = requireVendorId(vendorId);
 
   const trimmedQuery = question.trim();
   if (/^(hello|hi|hey|greetings|good\s+(morning|afternoon|evening)|howdy)\b/i.test(trimmedQuery)) {
@@ -996,7 +982,7 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
     trimmedQuery,
     topK,
     convContext,
-    vendorId,
+    id,
     previouslyShownIds
   );
 
@@ -1023,18 +1009,20 @@ async function answerShoppingQuestion(question, conversationHistory = [], vendor
   return { answer, products, sources };
 }
 
-// ---------------------------------------------------------------------------
-// Initialise on startup
-// ---------------------------------------------------------------------------
-buildVectorStore();
 module.exports = {
   answerShoppingQuestion,
   retrieveProducts,
   retrieveRelevantContext,
   buildVectorStore,
+  buildAllVectorStores,
   buildPopularityIndex,
   generateProductDescription,
   generateSeoContent,
   getVendorProductCount,
-  getVectorStoreCount: () => vectorStore.length
+  getVectorStoreCount: (vendorId) => {
+    if (vendorId !== undefined && vendorId !== null) {
+      return vectorStoresByVendor.get(requireVendorId(vendorId))?.length || 0;
+    }
+    return [...vectorStoresByVendor.values()].reduce((total, store) => total + store.length, 0);
+  }
 };
