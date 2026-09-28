@@ -480,7 +480,7 @@ async function generateLlmResponse(question, retrievedProducts, constraints, con
   }).join("\n");
 
   const constraintNote = constraintsMissed
-    ? "\n\nNOTE: No products in the ShopSense catalog perfectly match the user's exact price/stock/category constraints. The ShopSense catalog prices range from ₹99 to ₹9,999 — any price filter above ₹9,999 will find no exact matches. The products above are the closest available matches. Inform the user of this catalog price limitation and show the nearest alternatives."
+    ? "\n\nNOTE: The products above are the closest available matches, but may not satisfy every requested filter. Clearly tell the user that no exact matches were found."
     : "";
 
   const systemPrompt = `You are the ShopSense AI Shopping Assistant, a professional e-commerce advisor.
@@ -563,7 +563,7 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
 
   if (isGreeting) {
     const sample = (products || []).slice(0, 3);
-    const intro = `Hello! I'm the **ShopSense AI Shopping Assistant**. I can help you discover products, compare prices, check availability, and find recommendations across our catalog of 10,000+ items.\n\nHere are some products from our current catalog:\n\n`;
+    const intro = `Hello! I'm the **ShopSense AI Shopping Assistant**. I can help you discover products, compare prices, check availability, and find recommendations from your vendor catalog.\n\nHere are some products from your current catalog:\n\n`;
     if (sample.length === 0) return intro.trimEnd();
     const items = sample.map(p => {
       const s = p.stock > 0 ? `In Stock (${p.stock} units)` : "Out of Stock";
@@ -590,7 +590,7 @@ function formatGroundedFallbackResponse(question, products, constraints, constra
     }).join("\n");
     return (
       `The ShopSense catalog does not currently have products matching ${filterStr}.\n\n` +
-      `**Note:** The ShopSense catalog prices range from ₹99 to ₹9,999. No products meet the price threshold you specified.\n\n` +
+      `No products meet every price, stock, and category filter you specified.\n\n` +
       `Here are the closest available alternatives:\n\n${altItems}`
     );
   }
