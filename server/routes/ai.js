@@ -138,7 +138,7 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
     const liveProductIds = new Set(liveProducts.map((product) => String(product.id)));
     const answer = liveProducts.length === 0 &&
       ragService.getVendorProductCount(vendorId) === 0
-      ? "Your vendor catalog currently has no products available."
+      ? "This vendor account has no products in its catalog yet. Add products to this catalog, then ask me to search them."
       : result.answer;
     
     res.json({

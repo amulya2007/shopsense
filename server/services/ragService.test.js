@@ -87,6 +87,89 @@ describe("RAG shopping question retrieval", () => {
     assert.ok(products.every((product) => product.price >= 1000 && product.price <= 2000));
   });
 
+  it("understands category and use-case paraphrases without confusing home gym with home products", () => {
+    const workoutProducts = ragService.retrieveProducts(
+      "Got anything for my workout?",
+      20,
+      "",
+      demoVendorId
+    ).products;
+    const kitchenProducts = ragService.retrieveProducts(
+      "Any kitchenware available?",
+      20,
+      "",
+      demoVendorId
+    ).products;
+    const skincareProducts = ragService.retrieveProducts(
+      "Show skincare items",
+      20,
+      "",
+      demoVendorId
+    ).products;
+
+    assert.ok(workoutProducts.some((product) => product.name === "Flex Yoga Mat"));
+    assert.ok(workoutProducts.some((product) => product.name === "Neoprene Dumbbell Pair"));
+    assert.ok(!workoutProducts.some((product) =>
+      ["Bamboo Cutting Board", "Ceramic Coffee Mug Set", "Modern LED Desk Lamp"].includes(product.name)
+    ));
+    assert.ok(kitchenProducts.length > 0);
+    assert.ok(kitchenProducts.every((product) => product.category === "Home & Kitchen"));
+    assert.ok(skincareProducts.length > 0);
+    assert.ok(skincareProducts.every((product) => product.category === "Beauty"));
+  });
+
+  it("parses shorthand price amounts and applies them as hard limits", () => {
+    const { products } = ragService.retrieveProducts(
+      "Find something below Rs 1.5k",
+      20,
+      "",
+      demoVendorId
+    );
+
+    assert.ok(products.length > 0);
+    assert.ok(products.every((product) => product.price <= 1500));
+  });
+
+  it("orders inventory queries using actual stock values", () => {
+    const expected = db
+      .prepare("SELECT id FROM products WHERE vendor_id = ? ORDER BY stock ASC, price ASC LIMIT 1")
+      .get(demoVendorId);
+    const { products } = ragService.retrieveProducts(
+      "Which item has the least stock?",
+      1,
+      "",
+      demoVendorId
+    );
+
+    assert.equal(products.length, 1);
+    assert.equal(products[0].id, String(expected.id));
+  });
+
+  it("answers product-count questions with the exact vendor-scoped count", async () => {
+    const expected = db
+      .prepare("SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?")
+      .get(demoVendorId).count;
+    const result = await ragService.answerShoppingQuestion(
+      "How many products do I have?",
+      [],
+      demoVendorId
+    );
+
+    assert.match(result.answer, new RegExp(`\\b${expected} matching products?\\b`));
+  });
+
+  it("only reports low-stock items with positive stock within the alert threshold", () => {
+    const { products } = ragService.retrieveProducts(
+      "What is almost out of stock?",
+      20,
+      "",
+      demoVendorId
+    );
+
+    assert.ok(products.length > 0);
+    assert.ok(products.every((product) => product.stock > 0 && product.stock <= 5));
+  });
+
   it("requires a vendor scope instead of searching a shared catalog", () => {
     assert.throws(
       () => ragService.retrieveProducts("Show me products", 6),

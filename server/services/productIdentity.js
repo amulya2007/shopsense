@@ -29,7 +29,7 @@ const TYPE_PATTERNS = [
   ["watch", /\b(?:watches?|watch)\b/i],
   ["phone_case", /\b(?:phone\s*cases?|mobile\s*covers?)\b/i],
   ["screen_protector", /\b(?:screen\s*protectors?|tempered\s*glass)\b/i],
-  ["smartphone", /\b(?:smartphones?|mobile\s*phones?|iphones?)\b/i],
+  ["smartphone", /\b(?:smartphones?|mobile\s*phones?|cell\s*phones?|phones?|mobiles?|iphones?)\b/i],
   ["camera", /\b(?:cameras?|dslr)\b/i],
   ["television", /\b(?:televisions?|tvs?)\b/i],
   ["printer", /\b(?:printers?)\b/i],

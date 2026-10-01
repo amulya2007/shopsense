@@ -10,8 +10,7 @@ import {
   HelpCircle,
   TrendingUp,
   AlertCircle,
-  Info,
-  ExternalLink
+  Info
 } from "lucide-react";
 import api from "../../lib/api";
 
@@ -84,7 +83,18 @@ export default function VendorAssistant() {
   useEffect(() => {
     api.get("/ai/status")
       .then((res) => setStatus(res.data))
-      .catch(() => setStatus({ status: "online", vectorStoreReady: true, indexedProducts: null }));
+      .catch((err) => {
+        setStatus({
+          status: "offline",
+          vectorStoreReady: false,
+          indexedProducts: null,
+          provider: "API unavailable"
+        });
+        setError(
+          err.response?.data?.error ||
+          "Unable to connect to the ShopSense API. Check that the server is running and try again."
+        );
+      });
   }, []);
 
   useEffect(() => {
@@ -147,7 +157,11 @@ export default function VendorAssistant() {
       console.error("AI Assistant error:", err);
       const errMsg =
         err.response?.data?.error ||
-        "The AI Business Assistant is temporarily unavailable. Please try again.";
+        (err.response?.status === 401
+          ? "Your session has expired. Sign in again to use the AI Assistant."
+          : err.message === "Network Error"
+            ? "Unable to reach the ShopSense API. Check your connection and confirm the server is running."
+            : `The AI Assistant request failed${err.message ? `: ${err.message}` : ". Please try again."}`);
       setError(errMsg);
       setMessages((prev) => [
         ...prev,
@@ -207,9 +221,14 @@ export default function VendorAssistant() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 text-white">
-                <Sparkles size={12} className="text-amber-300" /> RAG System Active
+                <Sparkles size={12} className="text-amber-300" />
+                {status?.status === "offline"
+                  ? "API Unavailable"
+                  : status?.indexedProducts === 0
+                    ? "Your Catalog Is Empty"
+                    : "RAG System Active"}
               </span>
-              {status?.indexedProducts && (
+              {status?.indexedProducts !== null && status?.indexedProducts > 0 && (
                 <span className="text-[11px] font-semibold text-white/70">
                   {status.indexedProducts.toLocaleString()} products indexed
                 </span>
@@ -217,7 +236,11 @@ export default function VendorAssistant() {
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold">AI Business Assistant</h1>
             <p className="mt-1 text-sm text-white/80 max-w-xl">
-              Manage your inventory, analyze products, and get insights about your vendor catalog.
+              {status?.status === "offline"
+                ? "The assistant cannot reach the API right now. Check the connection or server and try again."
+                : status?.indexedProducts === 0
+                  ? "There are no products in this vendor account to search. Add products to your catalog or sign in to the account that owns them."
+                  : "Manage your inventory, analyze products, and get insights about your vendor catalog."}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -541,9 +564,13 @@ export default function VendorAssistant() {
           </form>
           <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: "var(--ink-soft)" }}>
             <span>Answers grounded in the ShopSense catalog — no hallucinated products.</span>
-            {status?.indexedProducts
+            {status?.status === "offline"
+              ? <span>API unavailable</span>
+              : status?.indexedProducts === 0
+                ? <span>No products in this vendor catalog</span>
+                : status?.indexedProducts
               ? <span>{status.indexedProducts.toLocaleString()} items indexed</span>
-              : <span>Catalog connected</span>
+              : <span>Connecting to catalog…</span>
             }
           </div>
         </div>
