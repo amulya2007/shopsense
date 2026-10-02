@@ -12,6 +12,12 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem("shopsense_user");
   }, [user]);
 
+  useEffect(() => {
+    const handleUnauthorized = () => setUser(null);
+    window.addEventListener("shopsense:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("shopsense:unauthorized", handleUnauthorized);
+  }, []);
+
   const login = (token, userData) => {
     localStorage.setItem("shopsense_token", token);
     setUser(userData);

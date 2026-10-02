@@ -20,4 +20,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && error.config?.url !== "/auth/login") {
+      localStorage.removeItem("shopsense_token");
+      localStorage.removeItem("shopsense_user");
+      window.dispatchEvent(new Event("shopsense:unauthorized"));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
