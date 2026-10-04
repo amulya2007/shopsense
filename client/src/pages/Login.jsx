@@ -52,6 +52,9 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const [resending, setResending] = useState(false);
   const [loginHistory, setLoginHistory] = useState(() => getLoginHistory("vendor"));
   const [showEmailHistory, setShowEmailHistory] = useState(false);
   const navigate = useNavigate();
@@ -60,6 +63,8 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setVerificationRequired(false);
+    setResendMessage("");
     setLoading(true);
     try {
       const { data } = await api.post("/auth/login", { email, password, role });
@@ -68,8 +73,25 @@ export default function Login() {
       navigate(role === "admin" ? "/admin/dashboard" : "/vendor/dashboard");
     } catch (err) {
       setError(err.response?.data?.error || "Something went wrong. Try again.");
+      setVerificationRequired(
+        err.response?.status === 403 &&
+        err.response?.headers?.["x-email-verification-required"] === "true"
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    setResending(true);
+    setResendMessage("");
+    try {
+      const { data } = await api.post("/auth/resend-verification", { email, role });
+      setResendMessage(data.message);
+    } catch (err) {
+      setResendMessage(err.response?.data?.error || "Could not send a verification email. Please try again later.");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -78,6 +100,8 @@ export default function Login() {
     setEmail("");
     setPassword("");
     setError("");
+    setVerificationRequired(false);
+    setResendMessage("");
     setLoginHistory(getLoginHistory(nextRole));
     setShowEmailHistory(false);
   };
@@ -182,6 +206,14 @@ export default function Login() {
               {error}
             </div>
           )}
+          {verificationRequired && (
+            <div className="mb-4 text-sm" style={{ color: "var(--ink-soft)" }}>
+              <button type="button" onClick={resendVerification} disabled={resending || !email.trim()} className="font-semibold underline disabled:opacity-60 focus-ring" style={{ color: "var(--primary)" }}>
+                {resending ? "Sending verification email…" : "Resend verification email"}
+              </button>
+              {resendMessage && <p className="mt-2" role="status">{resendMessage}</p>}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="relative">
@@ -278,9 +310,6 @@ export default function Login() {
             </p>
           )}
 
-          <p className="text-center text-xs mt-6" style={{ color: "var(--ink-soft)" }}>
-            Demo — Admin: admin@demo.com / admin123 · Vendor: vendor@demo.com / vendor123
-          </p>
         </div>
       </div>
     </div>

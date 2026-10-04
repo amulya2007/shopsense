@@ -8,7 +8,6 @@ import smtplib
 import ssl
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from email.utils import parseaddr
 from urllib.parse import urlencode
 
 import bcrypt
@@ -18,7 +17,7 @@ from jose import jwt
 from pydantic import BaseModel, Field
 
 from .database import DB_PATH
-from .main import DBConn, JWT_ALGORITHM, JWT_SECRET, TokenPayload
+from .main import DBConn, JWT_ALGORITHM, JWT_SECRET
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])

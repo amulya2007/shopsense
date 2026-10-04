@@ -2,8 +2,12 @@
 
 import re
 import secrets
+import shutil
 import sqlite3
+import subprocess
 import time
+from email import policy
+from email.parser import BytesParser
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -85,6 +89,26 @@ def _user(request: Request) -> TokenPayload | JSONResponse:
 
 def _row(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return dict(row) if row is not None else None
+
+
+def _hash_password(password: str) -> str:
+    if bcrypt is not None:
+        return bcrypt.hashpw(password.encode(), bcrypt.gensalt(10)).decode()
+    node = shutil.which("node")
+    bcryptjs = Path(__file__).resolve().parent.parent / "server" / "node_modules" / "bcryptjs"
+    if node and bcryptjs.exists():
+        script = (
+            "let s='';process.stdin.setEncoding('utf8');"
+            "process.stdin.on('data',d=>s+=d);"
+            f"process.stdin.on('end',()=>process.stdout.write(require({str(bcryptjs)!r}).hashSync(s,10)));"
+        )
+        result = subprocess.run(
+            [node, "-e", script], input=password, text=True, capture_output=True,
+            cwd=bcryptjs.parent.parent, check=False, timeout=10,
+        )
+        if result.returncode == 0:
+            return result.stdout
+    raise RuntimeError("No bcrypt implementation is available")
 
 
 def _number(value: Any) -> float:
@@ -185,16 +209,36 @@ async def upload_image(request: Request):
     if isinstance(user, JSONResponse):
         return user
     try:
-        form = await request.form()
-        upload = form.get("image")
-        if upload is None or not hasattr(upload, "read"):
+        content_type = request.headers.get("content-type", "")
+        if not content_type.lower().startswith("multipart/form-data"):
             return _error(400, "Choose an image file to upload.")
-        if not str(getattr(upload, "content_type", "")).startswith("image/"):
-            return _error(400, "Unable to upload this image. Please choose a valid image file.")
-        data = await upload.read(5 * 1024 * 1024 + 1)
+        content_length = int(request.headers.get("content-length", "0") or 0)
+        if content_length > 5 * 1024 * 1024 + 256 * 1024:
+            return _error(400, "Image must be 5 MB or smaller.")
+        raw = bytearray()
+        async for chunk in request.stream():
+            raw.extend(chunk)
+            if len(raw) > 5 * 1024 * 1024 + 256 * 1024:
+                return _error(400, "Image must be 5 MB or smaller.")
+        parsed = BytesParser(policy=policy.default).parsebytes(
+            f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode() + raw
+        )
+        upload = next(
+            (
+                part for part in parsed.iter_parts()
+                if part.get_content_disposition() == "form-data"
+                and part.get_param("name", header="content-disposition") == "image"
+            ),
+            None,
+        )
+        if upload is None or not upload.get_filename():
+            return _error(400, "Choose an image file to upload.")
+        if not upload.get_content_type().startswith("image/"):
+            return _error(400, "Choose an image file to upload.")
+        data = upload.get_payload(decode=True) or b""
         if len(data) > 5 * 1024 * 1024:
             return _error(400, "Image must be 5 MB or smaller.")
-        original_name = getattr(upload, "filename", "") or ""
+        original_name = upload.get_filename() or ""
         extension = Path(original_name).suffix.lower() or ".jpg"
         UPLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
         filename = _filename(user.id, extension)
@@ -640,9 +684,10 @@ async def update_profile(request: Request, db: sqlite3.Connection = Depends(_db)
             return _error(400, "Password must be at least 6 characters")
         if len(password) < 6:
             return _error(400, "Password must be at least 6 characters")
-        if bcrypt is None:
+        try:
+            password_hash = _hash_password(password)
+        except (OSError, RuntimeError, subprocess.SubprocessError):
             return _error(500, "Unable to update this profile.")
-        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(10)).decode()
     db.execute(
         """UPDATE vendors SET full_name=?, business_name=?, phone=?, business_address=?, password=?
            WHERE id=?""",

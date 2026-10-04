@@ -1,4 +1,6 @@
 import sqlite3
+import shutil
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -118,3 +120,20 @@ def test_validation_and_tenant_scoped_mutations(client):
     assert invalid_threshold.json() == {
         "error": "lowThreshold must be a non-negative whole number"
     }
+
+
+def test_image_upload_uses_vendor_id_and_returns_static_url(client, monkeypatch):
+    destination = Path.cwd() / "analytics_api" / ".vendor-route-test-uploads"
+    monkeypatch.setattr(vendor_routes, "UPLOAD_DIRECTORY", destination)
+    try:
+        response = client.post(
+            "/api/vendor/images",
+            headers=auth(),
+            files={"image": ("sample.png", b"test-image-data", "image/png")},
+        )
+        assert response.status_code == 201
+        image_url = response.json()["imageUrl"]
+        assert image_url.startswith("/uploads/products/vendor-1-")
+        assert (destination / image_url.rsplit("/", 1)[-1]).read_bytes() == b"test-image-data"
+    finally:
+        shutil.rmtree(destination, ignore_errors=True)

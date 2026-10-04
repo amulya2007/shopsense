@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Eye, EyeOff, PackageSearch, ShieldCheck } from "lucide-react";
 import api from "../lib/api";
 
@@ -9,7 +9,34 @@ export default function Register() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState("idle");
+  const [verificationMessage, setVerificationMessage] = useState("");
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const verificationToken = searchParams.get("verifyEmailToken");
+
+  useEffect(() => {
+    if (!verificationToken) return;
+
+    let active = true;
+    setVerificationStatus("checking");
+    api.post("/auth/verify-email", { token: verificationToken })
+      .then(({ data }) => {
+        if (!active) return;
+        setVerificationStatus("success");
+        setVerificationMessage(data.message);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setVerificationStatus("error");
+        setVerificationMessage(err.response?.data?.error || "This verification link is invalid or has expired.");
+      })
+      .finally(() => {
+        if (active) setSearchParams({}, { replace: true });
+      });
+
+    return () => { active = false; };
+  }, [verificationToken, setSearchParams]);
 
   const update = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -31,10 +58,25 @@ export default function Register() {
     return <div className="min-h-screen flex items-center justify-center p-5" style={{ background: "var(--surface)" }}>
       <div className="w-full max-w-md text-center p-8 rounded-2xl shadow-lg shadow-emerald-950/5" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
         <div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-5" style={{ background: "var(--success-soft)" }}><CheckCircle2 size={28} style={{ color: "var(--success)" }} /></div>
-        <p className="text-xs font-bold uppercase tracking-[0.16em] mb-2" style={{ color: "var(--success)" }}>Application submitted</p>
-        <h2 className="font-display text-xl font-bold mb-3">We have your details.</h2>
-        <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>An administrator will review your application. You can sign in once the account is approved.</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] mb-2" style={{ color: "var(--success)" }}>Verify your email</p>
+        <h2 className="font-display text-xl font-bold mb-3">Check your inbox.</h2>
+        <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>We sent a verification link to {form.email}. Verify your email before an administrator can review your application.</p>
         <button onClick={() => navigate("/login")} className="w-full py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Back to sign in</button>
+      </div>
+    </div>;
+  }
+
+  if (verificationStatus !== "idle") {
+    const isSuccess = verificationStatus === "success";
+    return <div className="min-h-screen flex items-center justify-center p-5" style={{ background: "var(--surface)" }}>
+      <div className="w-full max-w-md text-center p-8 rounded-2xl shadow-lg shadow-emerald-950/5" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+        {isSuccess && <div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-5" style={{ background: "var(--success-soft)" }}><CheckCircle2 size={28} style={{ color: "var(--success)" }} /></div>}
+        <p className="text-xs font-bold uppercase tracking-[0.16em] mb-2" style={{ color: isSuccess ? "var(--success)" : "var(--ink-soft)" }}>
+          {verificationStatus === "checking" ? "Verifying email" : isSuccess ? "Email verified" : "Verification failed"}
+        </p>
+        <h2 className="font-display text-xl font-bold mb-3">{verificationStatus === "checking" ? "Please wait…" : isSuccess ? "You’re verified." : "We couldn’t verify this link."}</h2>
+        {verificationMessage && <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>{verificationMessage}</p>}
+        {verificationStatus !== "checking" && <button onClick={() => navigate("/login")} className="w-full py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Continue to sign in</button>}
       </div>
     </div>;
   }
@@ -67,7 +109,7 @@ export default function Register() {
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>Password <span style={{ color: "var(--danger)" }}>*</span></label>
             <div className="relative">
-              <input required type={showPassword ? "text" : "password"} value={form.password} onChange={update("password")} placeholder="Minimum 6 characters" className="w-full px-3.5 py-2.5 pr-11 rounded-lg text-sm focus-ring" style={{ border: "1px solid var(--border)", background: "var(--surface)" }} />
+              <input required minLength={8} maxLength={72} type={showPassword ? "text" : "password"} value={form.password} onChange={update("password")} placeholder="8 to 72 characters" className="w-full px-3.5 py-2.5 pr-11 rounded-lg text-sm focus-ring" style={{ border: "1px solid var(--border)", background: "var(--surface)" }} />
               <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md focus-ring" style={{ color: "var(--ink-soft)" }} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>{showPassword ? <Eye size={17} /> : <EyeOff size={17} />}</button>
             </div>
           </div>
