@@ -1,9 +1,8 @@
-﻿"""
-ShopSense — FastAPI Analytics Microservice
+"""
+ShopSense — Python FastAPI backend
 
-Runs alongside the existing Express server (default port 8000).
-Reads the same SQLite database (server/db/shopsense.db) and validates
-the same JWT tokens issued by the Express /api/auth/login endpoint.
+Owns authentication, the marketplace API, analytics, and AI. It reads and
+writes the shared SQLite database at server/db/shopsense.db.
 
 Endpoints
 ---------
