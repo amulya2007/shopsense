@@ -266,7 +266,6 @@ User Question
     • Category signal boosting and cosine similarity
     • Exact token/name overlap boosts
     • Index contains only the authenticated vendor's live products
-    • Token overlap boost for exact name/category matches
       │
       ▼
 [3] Hard Constraint Filtering
@@ -285,7 +284,7 @@ User Question
       │
       ▼
 [5] Context Construction
-    • Up to 6 vendor products passed to the configured LLM
+    • Up to 6 vendor products supplied to the response generator
     • Context includes retrieved product fields and vendor sales history when available
     • Product cards and source citations are built separately from verified retrieved records
       │
