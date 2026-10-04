@@ -46,23 +46,25 @@ function removeLoginHistory(role, emailToRemove) {
 }
 
 export default function Login() {
+  const [searchParams] = useSearchParams();
   const [role, setRole] = useState("vendor");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState(() => searchParams.get("verified") === "1");
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
   const [resending, setResending] = useState(false);
   const [loginHistory, setLoginHistory] = useState(() => getLoginHistory("vendor"));
   const [showEmailHistory, setShowEmailHistory] = useState(false);
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setVerificationNotice(false);
     setError("");
     setVerificationRequired(false);
     setResendMessage("");
@@ -103,6 +105,7 @@ export default function Login() {
     setError("");
     setVerificationRequired(false);
     setResendMessage("");
+    setVerificationNotice(false);
     setLoginHistory(getLoginHistory(nextRole));
     setShowEmailHistory(false);
   };
@@ -169,7 +172,11 @@ export default function Login() {
             Sign in to manage your {isAdmin ? "marketplace" : "storefront"}.
           </p>
 
-          {searchParams.get("verified") === "1" && <div className="mb-4 text-sm px-4 py-3 rounded-lg" role="status" style={{ background: "var(--success-soft)", color: "var(--success)" }}>Email verified successfully. You can now log in.</div>}
+          <p className="-mt-5 mb-5 text-xs" style={{ color: "var(--ink-soft)" }}>
+            {isAdmin ? "Use the administrator email configured for this installation. There are no shared demo admin credentials." : "Use the email address you registered with."}
+          </p>
+
+          {verificationNotice && <div className="mb-4 text-sm px-4 py-3 rounded-lg" role="status" style={{ background: "var(--success-soft)", color: "var(--success)" }}>Email verified successfully. Sign in with the same email address you just verified.</div>}
           {searchParams.get("resend") === "1" && <div className="mb-4 text-sm" style={{ color: "var(--ink-soft)" }}>Need a fresh verification link? Enter your email, choose your account type, then request one below.</div>}
 
           <div
@@ -238,11 +245,12 @@ export default function Login() {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
+                  setVerificationNotice(false);
                   setShowEmailHistory(true);
                 }}
                 onFocus={() => setShowEmailHistory(true)}
                 autoComplete="email"
-                placeholder={role === "admin" ? "admin@demo.com" : "you@business.com"}
+                placeholder={role === "admin" ? "admin@yourdomain.com" : "you@business.com"}
                 className="w-full rounded-lg px-4 py-3 text-base focus-ring"
                 style={{ border: "1px solid var(--border)", background: "var(--card)" }}
               />
