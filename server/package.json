@@ -4,8 +4,9 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node ../scripts/start-local.js",
+    "start:api": "node index.js",
+    "dev": "node ../scripts/start-local.js --watch"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

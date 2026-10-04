@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "nodemon server/index.js",
+    "start": "node scripts/start-local.js",
+    "start:api": "node server/index.js",
+    "dev": "node scripts/start-local.js --watch",
     "test": "jest tests && node --test server/services/ragService.test.js"
   },
   "dependencies": {
