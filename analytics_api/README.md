@@ -9,7 +9,7 @@ From the repository root on Windows:
 
 ```powershell
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r analytics_api\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r analytics_api\requirements-dev.txt
 Copy-Item .env.example .env
 # Configure SMTP credentials, a strong JWT_SECRET, and the initial admin values in .env.
 npm run dev
@@ -67,5 +67,5 @@ catalog.
 ## Tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s analytics_api -p "test_*.py" -v
+.\.venv\Scripts\python.exe -m pytest -q analytics_api
 ```

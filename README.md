@@ -63,7 +63,7 @@ From the repository root:
 
 ```powershell
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r analytics_api\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r analytics_api\requirements-dev.txt
 ```
 
 On macOS/Linux, create and use `.venv` with `python3 -m venv .venv`.
@@ -439,7 +439,7 @@ PATCH /api/admin/vendors/:id/status
 Run the Python test suites from the repository root:
 
 ```bash
-.\.venv\Scripts\python.exe -m unittest discover -s analytics_api -p "test_*.py" -v
+.\.venv\Scripts\python.exe -m pytest -q analytics_api
 ```
 
 The suite covers authentication/email verification, Python AI/RAG behavior, and migrated API routers.

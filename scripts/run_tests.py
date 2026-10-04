@@ -16,13 +16,9 @@ if VENV_PYTHON.is_file() and Path(sys.executable).resolve() != VENV_PYTHON.resol
         [
             str(VENV_PYTHON),
             "-m",
-            "unittest",
-            "discover",
-            "-s",
+            "pytest",
+            "-q",
             "analytics_api",
-            "-p",
-            "test_*.py",
-            "-v",
         ],
     )
 
@@ -32,12 +28,8 @@ os.execv(
     [
         sys.executable,
         "-m",
-        "unittest",
-        "discover",
-        "-s",
+        "pytest",
+        "-q",
         "analytics_api",
-        "-p",
-        "test_*.py",
-        "-v",
     ],
 )
