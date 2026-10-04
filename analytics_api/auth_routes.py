@@ -360,9 +360,21 @@ def resend_verification(request: ResendVerificationRequest, db: DBConn) -> dict[
                 raise
             # Keep cooldown and delivery state indistinguishable from unknown accounts.
             logger.info("Verification resend was not completed (status=%s)", exc.status_code)
-    return {
-        "message": "If the account exists and needs verification, a verification email has been sent."
-    }
+    try:
+        preview_mode = _email_delivery_mode() == "console"
+    except HTTPException:
+        preview_mode = False
+    if preview_mode:
+        message = (
+            "Development email preview is active; no email was sent. "
+            "If this account needs verification, its local link appears in the API terminal."
+        )
+    else:
+        message = (
+            "If the account exists and needs verification, a new verification link has been requested. "
+            "Check the inbox if email delivery is configured."
+        )
+    return {"message": message}
 
 
 @router.post("/login")
