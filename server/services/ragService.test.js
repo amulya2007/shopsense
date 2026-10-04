@@ -158,6 +158,84 @@ describe("RAG shopping question retrieval", () => {
     assert.match(result.answer, new RegExp(`\\b${expected} matching products?\\b`));
   });
 
+  it("uses a configured Gemini provider to synthesize an answer from retrieved vendor products", async () => {
+    const originalFetch = global.fetch;
+    const originalGeminiKey = process.env.GEMINI_API_KEY;
+    const originalOpenAiKey = process.env.OPENAI_API_KEY;
+    let requestUrl;
+    let requestBody;
+    process.env.GEMINI_API_KEY = "test-gemini-key";
+    delete process.env.OPENAI_API_KEY;
+    global.fetch = async (url, options) => {
+      requestUrl = String(url);
+      requestBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: "These fitness items are in your catalog." }] } }]
+        })
+      };
+    };
+
+    try {
+      const result = await ragService.answerShoppingQuestion(
+        "What fitness products do you have?",
+        [],
+        demoVendorId
+      );
+
+      assert.equal(result.answer, "These fitness items are in your catalog.");
+      assert.match(requestUrl, /models\/gemini-2\.5-flash:generateContent/);
+      assert.ok(requestBody.contents[0].parts[0].text.includes("Flex Yoga Mat"));
+      assert.equal(ragService.getLlmProvider(), "Gemini");
+    } finally {
+      global.fetch = originalFetch;
+      if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalGeminiKey;
+      if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = originalOpenAiKey;
+    }
+  });
+
+  it("falls back from a failed Gemini request to OpenAI", async () => {
+    const originalFetch = global.fetch;
+    const originalGeminiKey = process.env.GEMINI_API_KEY;
+    const originalOpenAiKey = process.env.OPENAI_API_KEY;
+    const requestUrls = [];
+    process.env.GEMINI_API_KEY = "test-gemini-key";
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    global.fetch = async (url) => {
+      requestUrls.push(String(url));
+      if (String(url).includes("generativelanguage.googleapis.com")) {
+        return { ok: false, status: 503 };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: "Here are the matching catalog items." } }]
+        })
+      };
+    };
+
+    try {
+      const result = await ragService.answerShoppingQuestion(
+        "What fitness products do you have?",
+        [],
+        demoVendorId
+      );
+
+      assert.equal(result.answer, "Here are the matching catalog items.");
+      assert.equal(requestUrls.length, 2);
+      assert.ok(requestUrls[1].includes("api.openai.com/v1/chat/completions"));
+    } finally {
+      global.fetch = originalFetch;
+      if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalGeminiKey;
+      if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = originalOpenAiKey;
+    }
+  });
+
   it("only reports low-stock items with positive stock within the alert threshold", () => {
     const { products } = ragService.retrieveProducts(
       "What is almost out of stock?",
