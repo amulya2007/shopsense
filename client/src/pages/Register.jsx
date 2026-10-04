@@ -9,6 +9,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [developmentVerificationUrl, setDevelopmentVerificationUrl] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("idle");
   const [verificationMessage, setVerificationMessage] = useState("");
   const navigate = useNavigate();
@@ -23,8 +24,7 @@ export default function Register() {
     api.post("/auth/verify-email", { token: verificationToken })
       .then(({ data }) => {
         if (!active) return;
-        setVerificationStatus("success");
-        setVerificationMessage(data.message);
+        navigate("/login?verified=1", { replace: true, state: { message: data.message } });
       })
       .catch((err) => {
         if (!active) return;
@@ -36,7 +36,7 @@ export default function Register() {
       });
 
     return () => { active = false; };
-  }, [verificationToken, setSearchParams]);
+  }, [verificationToken, setSearchParams, navigate]);
 
   const update = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -45,7 +45,8 @@ export default function Register() {
     setError("");
     setLoading(true);
     try {
-      await api.post("/auth/register", form);
+      const { data } = await api.post("/auth/register", form);
+      setDevelopmentVerificationUrl(data.developmentVerificationUrl || "");
       setSubmitted(true);
     } catch (err) {
       setError(err.response?.data?.error || "Something went wrong. Try again.");
@@ -59,8 +60,9 @@ export default function Register() {
       <div className="w-full max-w-md text-center p-8 rounded-2xl shadow-lg shadow-emerald-950/5" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
         <div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-5" style={{ background: "var(--success-soft)" }}><CheckCircle2 size={28} style={{ color: "var(--success)" }} /></div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] mb-2" style={{ color: "var(--success)" }}>Verify your email</p>
-        <h2 className="font-display text-xl font-bold mb-3">Check your inbox.</h2>
-        <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>We sent a verification link to {form.email}. Verify your email before an administrator can review your application.</p>
+        <h2 className="font-display text-xl font-bold mb-3">{developmentVerificationUrl ? "Development email preview" : "Check your email."}</h2>
+        <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>{developmentVerificationUrl ? "Development mode: no email was sent. Use this local link to verify your account." : `We sent a verification link to ${form.email}. Verify your email before an administrator can review your application.`}</p>
+        {developmentVerificationUrl && <a href={developmentVerificationUrl} className="block mb-5 text-sm font-semibold underline break-all" style={{ color: "var(--primary)" }}>Open local verification link</a>}
         <button onClick={() => navigate("/login")} className="w-full py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Back to sign in</button>
       </div>
     </div>;
@@ -76,7 +78,7 @@ export default function Register() {
         </p>
         <h2 className="font-display text-xl font-bold mb-3">{verificationStatus === "checking" ? "Please wait…" : isSuccess ? "You’re verified." : "We couldn’t verify this link."}</h2>
         {verificationMessage && <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>{verificationMessage}</p>}
-        {verificationStatus !== "checking" && <button onClick={() => navigate("/login")} className="w-full py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Continue to sign in</button>}
+        {verificationStatus !== "checking" && <><Link to="/login?resend=1" className="block mb-4 text-sm font-semibold underline" style={{ color: "var(--primary)" }}>Request another verification email</Link><button onClick={() => navigate("/login")} className="w-full py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Continue to sign in</button></>}
       </div>
     </div>;
   }

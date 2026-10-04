@@ -100,8 +100,34 @@ def _smtp_settings() -> tuple[str, int, str, str, str, bool]:
     return host, port, username, password, sender, use_ssl
 
 
+def _email_delivery_mode() -> str:
+    """Console delivery is an explicit local-only preview and fails closed in production."""
+    mode = os.getenv("EMAIL_DELIVERY_MODE", "smtp").strip().lower()
+    if mode != "console":
+        return "smtp"
+    runtime = [os.getenv(key, "").strip().lower() for key in ("APP_ENV", "ENVIRONMENT", "NODE_ENV")]
+    deployed = any(os.getenv(key, "").strip() for key in (
+        "RENDER", "VERCEL", "DYNO", "K_SERVICE", "AWS_LAMBDA_FUNCTION_NAME",
+        "WEBSITE_INSTANCE_ID", "FUNCTIONS_WORKER_RUNTIME", "RAILWAY_ENVIRONMENT",
+    ))
+    explicitly_local = any(value in {"development", "dev", "test"} for value in runtime)
+    if deployed or "production" in runtime or not explicitly_local or os.getenv("ALLOW_DEV_EMAIL_PREVIEW", "").lower() != "true":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Development email preview is disabled for this environment.",
+        )
+    return "console"
+
+
 def log_email_configuration() -> None:
     """Report SMTP readiness without logging credentials or mailbox names."""
+    try:
+        if _email_delivery_mode() == "console":
+            logger.warning("Development email preview enabled; verification links are logged locally and no email is sent")
+            return
+    except HTTPException as exc:
+        logger.error("Email configuration rejected: %s", exc.detail)
+        return
     try:
         host, port, _username, _password, _sender, use_ssl = _smtp_settings()
     except HTTPException as exc:
@@ -112,11 +138,16 @@ def log_email_configuration() -> None:
     logger.info("SMTP configuration detected (host=%s port=%s transport=%s)", host, port, transport)
 
 
-def _send_verification_email(email: str, name: str, token: str) -> None:
-    host, port, username, password, sender, use_ssl = _smtp_settings()
+def _send_verification_email(email: str, name: str, token: str) -> str | None:
     client_origin = os.getenv("CLIENT_ORIGIN", "http://localhost:5173").rstrip("/")
     query = urlencode({"verifyEmailToken": token})
     verification_url = f"{client_origin}/register?{query}"
+
+    if _email_delivery_mode() == "console":
+        logger.warning("Development verification link for %s: %s", email, verification_url)
+        return verification_url
+
+    host, port, username, password, sender, use_ssl = _smtp_settings()
 
     message = EmailMessage()
     message["Subject"] = "Verify your ShopSense email address"
@@ -167,7 +198,7 @@ def _issue_verification(
     account_id: int,
     email: str,
     name: str,
-) -> None:
+) -> str | None:
     row = db.execute(
         "SELECT sent_at FROM email_verifications WHERE account_type = ? AND account_id = ?",
         (account_type, account_id),
@@ -204,7 +235,7 @@ def _issue_verification(
             sent_at.isoformat(),
         ),
     )
-    _send_verification_email(email, name, token)
+    return _send_verification_email(email, name, token)
 
 
 def _account_table(role: str) -> str:
@@ -248,7 +279,7 @@ def register(request: RegistrationRequest, db: DBConn) -> dict[str, str]:
                     request.businessAddress.strip() if request.businessAddress else None,
                 ),
             )
-            _issue_verification(db, "vendor", cursor.lastrowid, email, full_name)
+            development_url = _issue_verification(db, "vendor", cursor.lastrowid, email, full_name)
     except HTTPException:
         raise
     except Exception as exc:
@@ -259,33 +290,33 @@ def register(request: RegistrationRequest, db: DBConn) -> dict[str, str]:
             ) from exc
         raise
 
-    return {
+    response = {
         "message": "Registration submitted. Verify your email address before admin review.",
         "email": email,
     }
+    if development_url:
+        response["developmentVerificationUrl"] = development_url
+        response["message"] = "Development preview only: no email was sent. Open the local verification link."
+    return response
 
 
 @router.post("/verify-email")
 def verify_email(request: VerifyEmailRequest, db: DBConn) -> dict[str, str]:
     token_hash = hashlib.sha256(request.token.encode("utf-8")).hexdigest()
     verification = db.execute(
-        "SELECT account_type, account_id, expires_at, verified_at FROM email_verifications WHERE token_hash = ?",
+        "SELECT account_type, account_id, expires_at FROM email_verifications WHERE token_hash = ?",
         (token_hash,),
     ).fetchone()
     if not verification:
-        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
-    if verification["verified_at"]:
-        return {"message": "Email address verified. You can now sign in."}
+        raise HTTPException(status_code=400, detail="This verification link is invalid, expired, or already used.")
     try:
         expires_at = datetime.fromisoformat(verification["expires_at"])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.") from exc
     if expires_at <= _now():
-        db.execute(
-            "DELETE FROM email_verifications WHERE account_type = ? AND account_id = ?",
-            (verification["account_type"], verification["account_id"]),
-        )
-        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+        with db:
+            db.execute("DELETE FROM email_verifications WHERE token_hash = ?", (token_hash,))
+        raise HTTPException(status_code=400, detail="This verification link is invalid, expired, or already used.")
 
     table = _account_table(verification["account_type"])
     with db:
@@ -294,16 +325,12 @@ def verify_email(request: VerifyEmailRequest, db: DBConn) -> dict[str, str]:
             (verification["account_id"],),
         )
         if result.rowcount != 1:
-            raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+            raise HTTPException(status_code=400, detail="This verification link is invalid, expired, or already used.")
         db.execute(
-            """
-            UPDATE email_verifications
-            SET verified_at = ?
-            WHERE account_type = ? AND account_id = ?
-            """,
-            (_now().isoformat(), verification["account_type"], verification["account_id"]),
+            "DELETE FROM email_verifications WHERE token_hash = ?",
+            (token_hash,),
         )
-    return {"message": "Email address verified. You can now sign in."}
+    return {"message": "Email verified successfully. You can now log in."}
 
 
 @router.post("/resend-verification")
@@ -319,14 +346,20 @@ def resend_verification(request: ResendVerificationRequest, db: DBConn) -> dict[
         (email,),
     ).fetchone()
     if account and not account["email_verified"]:
-        with db:
-            _issue_verification(
-                db,
-                request.role,
-                account["id"],
-                email,
-                account["display_name"],
-            )
+        try:
+            with db:
+                _issue_verification(
+                    db,
+                    request.role,
+                    account["id"],
+                    email,
+                    account["display_name"],
+                )
+        except HTTPException as exc:
+            if exc.status_code not in {status.HTTP_429_TOO_MANY_REQUESTS, status.HTTP_503_SERVICE_UNAVAILABLE}:
+                raise
+            # Keep cooldown and delivery state indistinguishable from unknown accounts.
+            logger.info("Verification resend was not completed (status=%s)", exc.status_code)
     return {
         "message": "If the account exists and needs verification, a verification email has been sent."
     }

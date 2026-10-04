@@ -155,13 +155,14 @@ JWT_SECRET=your_production_secret_here
 | `LLM_API_KEY` | Optional | Legacy alias for `GEMINI_API_KEY` |
 | `JWT_SECRET` | Recommended | JWT signing secret (defaults to dev value) |
 | `PYTHON_API_PORT` | Optional | Python API port (defaults to 8000) |
-| `CLIENT_ORIGIN` | Optional | Additional CORS origin for production deploys |
+| `CLIENT_ORIGIN` | Optional | Frontend origin used for verification links and CORS (local default is port 5173) |
 | `DB_PATH` | Optional | SQLite database path |
 | `SMTP_HOST` | Required for registration | SMTP mail server host |
 | `SMTP_PORT` | Required for registration | SMTP port (587 with STARTTLS; 465 with SSL) |
 | `SMTP_USERNAME` | Required for registration | SMTP account username |
 | `SMTP_PASSWORD` | Required for registration | SMTP account password/app password |
 | `SMTP_FROM` | Optional | Sender address (defaults to `SMTP_USERNAME`; `SMTP_FROM_EMAIL` is a legacy alias) |
+| `SMTP_USE_SSL` | Optional | Use implicit TLS with port 465; defaults to STARTTLS with port 587 |
 | `BOOTSTRAP_ADMIN_EMAIL` | Initial setup | Email address for the first administrator |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial setup | Unique 12-72 byte password for the first administrator |
 

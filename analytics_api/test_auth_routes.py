@@ -145,7 +145,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             "/api/auth/verify-email",
             json={"token": self.sent_tokens[0][1]},
         )
-        self.assertEqual(repeated_verification.status_code, 200)
+        self.assertEqual(repeated_verification.status_code, 400)
 
     @patch.dict(
         os.environ,
@@ -156,6 +156,8 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             "SMTP_PASSWORD": "test-secret",
             "SMTP_FROM": "shop@example.test",
             "CLIENT_ORIGIN": "http://localhost:5173",
+            "APP_ENV": "test",
+            "EMAIL_DELIVERY_MODE": "smtp",
         },
     )
     @patch("analytics_api.auth_routes.smtplib.SMTP")
@@ -249,6 +251,41 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(verified.status_code, 200)
 
     @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_resend_rotates_token_and_unknown_email_gets_same_response(self, send_email):
+        send_email.side_effect = self.capture_email
+        self.db.execute(
+            "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
+            ("Admin Person", "admin@example.com", "unused"),
+        )
+        first = await self.client.post("/api/auth/resend-verification", json={"email": "admin@example.com", "role": "admin"})
+        self.db.execute("UPDATE email_verifications SET sent_at = '2000-01-01T00:00:00+00:00'")
+        second = await self.client.post("/api/auth/resend-verification", json={"email": "admin@example.com", "role": "admin"})
+        self.assertEqual((first.status_code, second.status_code), (200, 200))
+        self.assertNotEqual(self.sent_tokens[0][1], self.sent_tokens[1][1])
+        old_token = await self.client.post("/api/auth/verify-email", json={"token": self.sent_tokens[0][1]})
+        self.assertEqual(old_token.status_code, 400)
+        unknown = await self.client.post("/api/auth/resend-verification", json={"email": "absent@example.com", "role": "admin"})
+        self.assertEqual(unknown.json(), second.json())
+
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_expired_token_is_removed(self, send_email):
+        send_email.side_effect = self.capture_email
+        await self.client.post("/api/auth/register", json={
+            "fullName": "Casey Vendor", "businessName": "Casey Goods",
+            "email": "expiry@example.com", "password": "correct-horse-battery",
+        })
+        self.db.execute("UPDATE email_verifications SET expires_at = '2000-01-01T00:00:00+00:00'")
+        expired = await self.client.post("/api/auth/verify-email", json={"token": self.sent_tokens[0][1]})
+        self.assertEqual(expired.status_code, 400)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM email_verifications").fetchone()[0], 0)
+
+    @patch.dict(os.environ, {"APP_ENV": "production", "EMAIL_DELIVERY_MODE": "console", "ALLOW_DEV_EMAIL_PREVIEW": "true"}, clear=True)
+    def test_production_rejects_development_email_preview(self):
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException):
+            _send_verification_email("person@example.test", "Test Person", "a" * 43)
+
+    @patch("analytics_api.auth_routes._send_verification_email")
     async def test_unverified_admin_cannot_login_until_mailbox_is_confirmed(self, send_email):
         send_email.side_effect = self.capture_email
         password = "a-unique-admin-password"
@@ -290,6 +327,8 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             "SMTP_FROM_EMAIL": "shop@example.test",
             "SMTP_USE_SSL": "false",
             "CLIENT_ORIGIN": "https://shopsense.example.test",
+            "APP_ENV": "test",
+            "EMAIL_DELIVERY_MODE": "smtp",
         },
     )
     @patch("analytics_api.auth_routes.smtplib.SMTP")
@@ -374,6 +413,8 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             "SMTP_PASSWORD": "secret-that-must-not-be-logged",
             "SMTP_FROM": "shop@example.test",
             "CLIENT_ORIGIN": "https://shopsense.example.test",
+            "APP_ENV": "test",
+            "EMAIL_DELIVERY_MODE": "smtp",
         },
         clear=True,
     )
@@ -395,6 +436,8 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             "SMTP_USERNAME": "shop@example.test",
             "SMTP_PASSWORD": "secret-that-must-not-be-logged",
             "SMTP_FROM": "shop@example.test",
+            "APP_ENV": "test",
+            "EMAIL_DELIVERY_MODE": "smtp",
         },
         clear=True,
     )

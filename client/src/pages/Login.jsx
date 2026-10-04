@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { PackageSearch, Eye, EyeOff, Store, ShieldCheck, X } from "lucide-react";
 import api from "../lib/api";
 import { useAuth } from "../context/auth";
@@ -58,6 +58,7 @@ export default function Login() {
   const [loginHistory, setLoginHistory] = useState(() => getLoginHistory("vendor"));
   const [showEmailHistory, setShowEmailHistory] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
@@ -168,6 +169,9 @@ export default function Login() {
             Sign in to manage your {isAdmin ? "marketplace" : "storefront"}.
           </p>
 
+          {searchParams.get("verified") === "1" && <div className="mb-4 text-sm px-4 py-3 rounded-lg" role="status" style={{ background: "var(--success-soft)", color: "var(--success)" }}>Email verified successfully. You can now log in.</div>}
+          {searchParams.get("resend") === "1" && <div className="mb-4 text-sm" style={{ color: "var(--ink-soft)" }}>Need a fresh verification link? Enter your email, choose your account type, then request one below.</div>}
+
           <div
             className="grid grid-cols-2 gap-1 rounded-xl p-1.5 mb-6"
             style={{ background: "var(--card)", border: "1px solid var(--border)" }}
@@ -207,6 +211,14 @@ export default function Login() {
             </div>
           )}
           {verificationRequired && (
+            <div className="mb-4 text-sm" style={{ color: "var(--ink-soft)" }}>
+              <button type="button" onClick={resendVerification} disabled={resending || !email.trim()} className="font-semibold underline disabled:opacity-60 focus-ring" style={{ color: "var(--primary)" }}>
+                {resending ? "Sending verification email…" : "Resend verification email"}
+              </button>
+              {resendMessage && <p className="mt-2" role="status">{resendMessage}</p>}
+            </div>
+          )}
+          {searchParams.get("resend") === "1" && !verificationRequired && (
             <div className="mb-4 text-sm" style={{ color: "var(--ink-soft)" }}>
               <button type="button" onClick={resendVerification} disabled={resending || !email.trim()} className="font-semibold underline disabled:opacity-60 focus-ring" style={{ color: "var(--primary)" }}>
                 {resending ? "Sending verification email…" : "Resend verification email"}
