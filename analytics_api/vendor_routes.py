@@ -6,6 +6,8 @@ import shutil
 import sqlite3
 import subprocess
 import time
+import os
+from dataclasses import dataclass
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
@@ -16,8 +18,10 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
+from .database import DB_PATH
 
-from .main import DB_PATH, JWT_ALGORITHM, JWT_SECRET, TokenPayload
+JWT_SECRET = os.getenv("JWT_SECRET", "shopsense-dev-secret")
+JWT_ALGORITHM = "HS256"
 
 try:
     import bcrypt
@@ -25,7 +29,7 @@ except ImportError:  # pragma: no cover - available in production deployments
     bcrypt = None
 
 
-router = APIRouter(prefix="/api/vendor")
+router = APIRouter(prefix="/vendor")
 UPLOAD_DIRECTORY = Path(__file__).resolve().parent.parent / "server" / "uploads" / "products"
 IMAGE_EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -48,6 +52,19 @@ SYSTEM_DESCRIPTION_MARKERS = (
     "catalog details", "product categories", "product name", "only details that appear",
     "internal data", "data limitations", "catalog/listing",
 )
+REQUIRED_SCHEMA = {
+    "vendors": {"id", "full_name", "business_name", "email", "password", "phone",
+                "business_address", "status", "joined_at"},
+    "products": {"id", "vendor_id", "name", "description", "category", "price", "stock",
+                 "image_url", "created_at", *SEO_FIELDS.keys()},
+    "sales": {"id", "vendor_id", "product_id", "quantity", "amount", "sold_at"},
+}
+
+
+@dataclass
+class TokenPayload:
+    id: int
+    role: str
 
 
 def _error(code: int, message: str) -> JSONResponse:
@@ -59,6 +76,24 @@ def _open_db():
         raise RuntimeError("Database unavailable")
     connection = sqlite3.connect(DB_PATH, check_same_thread=False)
     connection.row_factory = sqlite3.Row
+    missing = []
+    for table, required_columns in REQUIRED_SCHEMA.items():
+        actual_columns = {
+            row["name"] for row in connection.execute(f'PRAGMA table_info("{table}")')
+        }
+        if not actual_columns:
+            missing.append(f"table {table}")
+            continue
+        missing.extend(
+            f"column {table}.{column}"
+            for column in sorted(required_columns - actual_columns)
+        )
+    if missing:
+        connection.close()
+        raise HTTPException(
+            status_code=503,
+            detail=f"Vendor API schema is incomplete: {', '.join(missing)}",
+        )
     return connection
 
 

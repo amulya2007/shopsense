@@ -352,16 +352,22 @@ The assistant supports lightweight follow-up queries. The frontend sends the las
 ```
 POST /api/auth/login
 POST /api/auth/register
+POST /api/auth/verify-email
+POST /api/auth/resend-verification
+POST /api/auth/bootstrap-admin  (first administrator only)
 ```
 
 All `/api/vendor/*` and `/api/analytics/*` endpoints require `Authorization: Bearer <token>`.
 
 ### Vendor Catalog
 
+Email verification must be completed before vendor/admin login. All protected `/api/*`
+operations require a bearer JWT.
+
 ```
 GET    /api/vendor/dashboard
 GET    /api/vendor/products
-POST   /api/vendor/product
+POST   /api/vendor/products
 PUT    /api/vendor/products/:id
 DELETE /api/vendor/products/:id
 PATCH  /api/vendor/products/:id/stock

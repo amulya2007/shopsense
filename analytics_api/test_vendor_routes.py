@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from jose import jwt
 
 from analytics_api import vendor_routes
-from analytics_api.main import JWT_ALGORITHM, JWT_SECRET
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def client():
         yield connection
 
     app = FastAPI()
-    app.include_router(vendor_routes.router)
+    app.include_router(vendor_routes.router, prefix="/api")
     app.dependency_overrides[vendor_routes._db] = override_db
     with TestClient(app) as test_client:
         yield test_client
@@ -54,7 +54,11 @@ def client():
 
 
 def auth(role="vendor", user_id=1):
-    token = jwt.encode({"id": user_id, "role": role}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(
+        {"id": user_id, "role": role},
+        vendor_routes.JWT_SECRET,
+        algorithm=vendor_routes.JWT_ALGORITHM,
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -137,3 +141,15 @@ def test_image_upload_uses_vendor_id_and_returns_static_url(client, monkeypatch)
         assert (destination / image_url.rsplit("/", 1)[-1]).read_bytes() == b"test-image-data"
     finally:
         shutil.rmtree(destination, ignore_errors=True)
+
+
+def test_router_prefix_and_required_database_schema(tmp_path, monkeypatch):
+    assert vendor_routes.router.prefix == "/vendor"
+    incomplete_db = tmp_path / "incomplete.sqlite"
+    sqlite3.connect(incomplete_db).close()
+    monkeypatch.setattr(vendor_routes, "DB_PATH", incomplete_db)
+
+    with pytest.raises(HTTPException) as error:
+        vendor_routes._open_db()
+    assert error.value.status_code == 503
+    assert "schema is incomplete" in error.value.detail
