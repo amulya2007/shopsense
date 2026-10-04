@@ -7,7 +7,7 @@ import httpx
 import bcrypt
 
 from analytics_api import main
-from analytics_api.auth_routes import _send_verification_email
+from analytics_api.auth_routes import _send_verification_email, _smtp_settings
 
 
 def make_auth_database():
@@ -257,6 +257,20 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as error:
             _send_verification_email("person@example.test", "Test Person", "test-token")
         self.assertEqual(error.exception.status_code, 503)
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "test-secret",
+            "SMTP_FROM_EMAIL": "",
+        },
+        clear=True,
+    )
+    def test_blank_sender_address_defaults_to_smtp_username(self):
+        self.assertEqual(_smtp_settings()[4], "shop@example.test")
 
     @patch.dict(
         os.environ,
