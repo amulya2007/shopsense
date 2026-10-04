@@ -233,7 +233,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["From"], "shop@example.test")
         self.assertIn(
             "https://shopsense.example.test/register?verifyEmailToken=test-token",
-            message.as_string(),
+            message.get_body(preferencelist=("plain",)).get_content(),
         )
         smtp.starttls.assert_called_once()
 
