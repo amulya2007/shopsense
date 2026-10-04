@@ -21,7 +21,8 @@ Docker Compose starts the AI service and Express API together.
 
 ## Endpoints
 
-All endpoints except `GET /health` require a bearer JWT from Express login.
+All `/ai/*` and `/analytics/*` endpoints require a bearer JWT from Express login.
+`/health`, `/docs`, `/redoc`, and `/openapi.json` do not require authentication.
 
 | Method | Path | Description |
 |---|---|---|

@@ -73,6 +73,8 @@ shopsense/
 
 ### 1. Backend
 
+From the repository root:
+
 ```bash
 cd server
 npm install
@@ -95,7 +97,7 @@ Starts the API on `http://localhost:4000`. On first run, SQLite initialises auto
 
 ### 2. Python AI & Analytics Service
 
-The assistant's retrieval and response generation run in Python. Start this service alongside Express:
+The assistant's retrieval and response generation run in Python. In a second terminal, from the repository root:
 
 ```powershell
 cd analytics_api
@@ -108,6 +110,8 @@ uvicorn main:app --reload --port 8000
 It reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. The Node API proxies the existing `/api/ai/*` endpoints to Python. Docker Compose starts both services together.
 
 ### 3. Frontend
+
+From the repository root in a new terminal:
 
 ```bash
 cd client
