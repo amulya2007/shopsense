@@ -63,7 +63,7 @@ def _smtp_settings() -> tuple[str, int, str, str, str, bool]:
     host = os.getenv("SMTP_HOST", "").strip()
     username = os.getenv("SMTP_USERNAME", "").strip()
     password = os.getenv("SMTP_PASSWORD", "")
-    sender = os.getenv("SMTP_FROM_EMAIL", username).strip()
+    sender = os.getenv("SMTP_FROM_EMAIL", "").strip() or username
     if not all((host, username, password, sender)):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

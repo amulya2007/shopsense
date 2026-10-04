@@ -83,7 +83,7 @@ npm run dev
 
 This starts the Python API at `http://localhost:8000`; no Node/Express backend is used. The API initializes SQLite on first run and imports the historical XLSX dataset.
 
-Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL` in the root `.env`. Root `.env` values take precedence over legacy `server/.env` values. Gmail requires an app password; do not put credentials in frontend code or commit them.
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in the root `.env`. Root `.env` values take precedence over legacy `server/.env` values. `SMTP_FROM_EMAIL` defaults to `SMTP_USERNAME` when left blank. Gmail requires an app password; do not put credentials in frontend code or commit them.
 
 To create the first administrator, set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, and a unique `BOOTSTRAP_ADMIN_PASSWORD` in `.env`, then call the one-time bootstrap endpoint:
 
@@ -161,7 +161,7 @@ JWT_SECRET=your_production_secret_here
 | `SMTP_PORT` | Required for registration | SMTP port (587 with STARTTLS; 465 with SSL) |
 | `SMTP_USERNAME` | Required for registration | SMTP account username |
 | `SMTP_PASSWORD` | Required for registration | SMTP account password/app password |
-| `SMTP_FROM_EMAIL` | Required for registration | Verified sender address |
+| `SMTP_FROM_EMAIL` | Optional | Sender address (defaults to `SMTP_USERNAME`) |
 | `BOOTSTRAP_ADMIN_EMAIL` | Initial setup | Email address for the first administrator |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial setup | Unique 12-72 byte password for the first administrator |
 
