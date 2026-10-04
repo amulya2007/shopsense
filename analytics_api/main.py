@@ -27,45 +27,33 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
+_THIS_DIR = Path(__file__).parent
+load_dotenv(_THIS_DIR.parent / "server" / ".env")
+
 if __package__:
     from . import ai_rag
+    from .database import DB_PATH, initialize_database
 else:
     import ai_rag
+    from database import DB_PATH, initialize_database
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-_THIS_DIR = Path(__file__).parent
-load_dotenv(_THIS_DIR.parent / "server" / ".env")
-
 # Matches the Express middleware/auth.js default secret
 JWT_SECRET: str = os.getenv("JWT_SECRET", "shopsense-dev-secret")
 JWT_ALGORITHM: str = "HS256"
-
-# Shared SQLite database written by the Express server
-_configured_db_path = Path(
-    os.getenv("DB_PATH", str(_THIS_DIR / ".." / "server" / "db" / "shopsense.db"))
-)
-DB_PATH: Path = (
-    _configured_db_path
-    if _configured_db_path.is_absolute()
-    else _THIS_DIR.parent / _configured_db_path
-).resolve()
 
 # ---------------------------------------------------------------------------
 # Database dependency
 # ---------------------------------------------------------------------------
 
 def get_db():
-    """Open a read-only connection to the shared SQLite database."""
-    if not DB_PATH.exists():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database not found at {DB_PATH}. Start the Express server first.",
-        )
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+    """Open a request-scoped connection to the ShopSense database."""
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
     finally:
@@ -169,6 +157,8 @@ class ProductContentRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    initialize_database()
+    (DB_PATH.parent.parent / "uploads").mkdir(parents=True, exist_ok=True)
     print(f"[ShopSense Analytics] DB path : {DB_PATH}")
     print(f"[ShopSense Analytics] DB exists: {DB_PATH.exists()}")
     yield
@@ -195,6 +185,17 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def normalize_api_prefix(request, call_next):
+    """Accept established /api/* frontend URLs as well as native FastAPI URLs."""
+    path = request.scope["path"]
+    if path == "/api" or path.startswith("/api/"):
+        request.scope["path"] = path[4:] or "/"
+        request.scope["raw_path"] = request.scope["path"].encode("utf-8")
+    return await call_next(request)
+
 
 # ---------------------------------------------------------------------------
 # Health check (no auth)
@@ -515,3 +516,17 @@ def get_top_products(
         for idx, r in enumerate(rows)
     ]
     return TopProductsResponse(limit=limit, category=category, sortBy=sort_by, products=products)
+
+
+if __package__:
+    from .auth_routes import router as auth_router
+else:
+    from auth_routes import router as auth_router
+
+app.include_router(auth_router)
+
+from fastapi.staticfiles import StaticFiles
+
+uploads_dir = DB_PATH.parent.parent / "uploads"
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")

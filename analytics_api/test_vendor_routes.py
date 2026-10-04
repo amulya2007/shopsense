@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from . import vendor_routes
-from .main import JWT_ALGORITHM, JWT_SECRET
+from analytics_api import vendor_routes
+from analytics_api.main import JWT_ALGORITHM, JWT_SECRET
 
 
 @pytest.fixture
