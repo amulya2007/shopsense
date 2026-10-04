@@ -1,28 +1,11 @@
 {
   "name": "shopsense",
   "version": "1.0.0",
-  "main": "server/index.js",
+  "private": true,
+  "description": "ShopSense Python API startup and test commands",
   "scripts": {
-    "start": "node scripts/start-local.js",
-    "start:api": "node server/index.js",
-    "dev": "node scripts/start-local.js --watch",
-    "test": "jest tests && node --test server/services/ragService.test.js"
-  },
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "cors": "^2.8.5",
-    "better-sqlite3": "12.11.1",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^2.2.0",
-    "xlsx": "^0.18.5",
-    "swagger-ui-express": "^5.0.0",
-    "swagger-jsdoc": "^6.2.8"
-  },
-  "devDependencies": {
-    "jest": "^29.6.2",
-    "supertest": "^6.3.3",
-    "nodemon": "^3.0.1"
+    "start": "python scripts/start_api.py",
+    "dev": "python scripts/start_api.py --reload",
+    "test": "python -m unittest discover -s analytics_api -p \"test_*.py\" -v"
   }
 }
