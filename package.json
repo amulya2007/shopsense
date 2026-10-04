@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "test": "jest tests"
+    "test": "jest tests && node --test server/services/ragService.test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

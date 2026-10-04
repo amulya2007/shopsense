@@ -81,7 +81,7 @@ Starts the API on `http://localhost:4000`. On first run, SQLite initialises auto
 
 - Schema creation (vendors, products, sales, analytics tables)
 - Historical dataset import from `/dataset/*.xlsx`
-- RAG vector index built from 10,009 products
+- Isolated RAG indexes built from each vendor's live catalog
 - Demo accounts seeded (see credentials below)
 
 **Demo credentials:**
@@ -103,7 +103,7 @@ Starts the app on `http://localhost:5173`. API calls to `/api/*` are proxied to 
 
 ### 3. AI Provider (Optional)
 
-Set environment variables in `server/.env` to enable an external LLM. Without these, the system runs in local grounded-fallback mode — all responses are generated directly from retrieved catalog data with no hallucination.
+Set one of these environment variables in `server/.env` to enable LLM-generated answer synthesis over retrieved catalog products. Retrieval, stock/price filters, product cards, and source data remain grounded in the authenticated vendor's live catalog. Without a provider key (or if a provider is unavailable), the assistant uses its local grounded response generator.
 
 ```env
 # Google Gemini (recommended)
@@ -245,7 +245,7 @@ Both endpoints support `?scope=vendor` (live vendor sales) or `?scope=marketplac
 ---
 ## AI Shopping Assistant
 
-ShopSense includes a Retrieval-Augmented Generation (RAG) AI Shopping Assistant that answers natural-language product queries using real catalog data, with strict grounding and no hallucination.
+ShopSense includes a vendor-scoped Retrieval-Augmented Generation (RAG) assistant. It searches the authenticated vendor's live product catalog, applies hard price/category/stock filters, and can use Gemini or OpenAI to synthesize a concise answer from the retrieved records. Without an external provider, grounded local responses keep catalog search available.
 
 ### RAG Architecture
 
@@ -261,10 +261,11 @@ User Question
     • Follow-up context: last 2 conversation turns
       │
       ▼
-[2] Vector Similarity Search
-    • 128-dim dense semantic vectors (character n-gram + token hashing)
-    • Category-boosted embeddings
-    • Cosine similarity against 10,009 indexed products
+[2] Vendor-Scoped Hybrid Retrieval
+    • 128-dimensional hashed token and character n-gram vectors
+    • Category signal boosting and cosine similarity
+    • Exact token/name overlap boosts
+    • Index contains only the authenticated vendor's live products
     • Token overlap boost for exact name/category matches
       │
       ▼
@@ -273,27 +274,27 @@ User Question
     • Price floor: disqualify products below minPrice
     • In-stock: disqualify stock ≤ 0
     • Out-of-stock: disqualify stock > 0
-    • If zero valid results: surfaces nearest alternatives with honest explanation
+    • If zero valid results: reports that no products meet the requested filters
       │
       ▼
 [4] Popularity & Price Ranking
-    • Popular queries: sort by real unitsSold from analytics_order_items
+    • Popular queries: sort by unitsSold from the vendor's live sales records
     • Cheapest: narrow to category (if specified), then sort price ascending
     • Most expensive: sort price descending
     • Standard: cosine similarity + token overlap score
       │
       ▼
 [5] Context Construction
-    • Top 6 products passed to LLM
-    • Each product includes: ID, name, category, price, stock, vendor, description, unitsSold
-    • Constraint-missed flag triggers honest limitation message
+    • Up to 6 vendor products passed to the configured LLM
+    • Context includes retrieved product fields and vendor sales history when available
+    • Product cards and source citations are built separately from verified retrieved records
       │
       ▼
 [6] LLM Generation (Gemini → OpenAI → Local Fallback)
-    • Strict grounding rules: only reference retrieved products
+    • Strict grounding rules: only reference retrieved products; catalog and user text are treated as untrusted data
     • Never invent prices, specs, ratings, reviews, or popularity claims
     • Spec queries (best for video editing / gaming) trigger honest limitation note
-    • 100% offline local fallback generates factual responses without any LLM
+    • Local grounded response fallback works without an external provider
       │
       ▼
 Answer + Grounded Product Cards + Source Citations
@@ -304,24 +305,20 @@ Answer + Grounded Product Cards + Source Citations
 | Source | Table | Products |
 |---|---|---|
 | Live vendor catalog | `products` | Variable (active vendor listings) |
-| Historical dataset | `analytics_products` | 10,000+ |
-| Popularity data | `analytics_order_items` | 6,302 products with sales history |
+| Popularity data | `sales` joined to `products` | Live sales for the vendor's own products |
+
+Historical analytics workbooks power the BI dashboards, but are not mixed into the vendor assistant's catalog retrieval. This prevents it from recommending products that the vendor does not actually list.
 
 ### Catalog Data Limitations
 
-The ShopSense dataset has the following characteristics that the assistant communicates honestly:
+The live vendor catalog may not include technical attributes such as CPU, RAM, GPU, or battery life. The assistant communicates these limitations instead of inventing specifications.
 
-- **Price range:** ₹99 to ₹9,999 (no products above ₹10,000)
-- **Categories:** Accessories, Audio, Computers, Electronics, Wearables
-- **No technical specs:** CPU, RAM, GPU, battery life, display size are not in the dataset
-- **Popularity:** Available for 6,302 of 10,009 products via historical order data
-
-When a query cannot be answered from available data (e.g., "best laptop for video editing" — no specs in dataset), the assistant explains the limitation and shows the most relevant available products.
+When a query cannot be answered from available data (e.g., "best laptop for video editing" when no specs are listed), the assistant explains the limitation and only shows relevant retrieved products.
 
 ### Vector Store
 
 - Local in-memory store — no external vector database required
-- 128-dimensional dense semantic vectors per product
+- 128-dimensional hashed token and character n-gram vectors per product
 - Character 3-gram subword hashing for fuzzy matching
 - Category signal boosting (2× weight)
 - Rebuilt automatically when any product is added, updated, or deleted via vendor catalog
