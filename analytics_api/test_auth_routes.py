@@ -1,11 +1,13 @@
 import sqlite3
 import unittest
+import os
 from unittest.mock import patch
 
 import httpx
 import bcrypt
 
 from analytics_api import main
+from analytics_api.auth_routes import _send_verification_email
 
 
 def make_auth_database():
@@ -67,6 +69,11 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     def capture_email(self, email, _name, token):
         self.sent_tokens.append((email, token))
+
+    async def test_health_endpoint_accepts_existing_api_prefix(self):
+        response = await self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
 
     @patch("analytics_api.auth_routes._send_verification_email")
     async def test_vendor_must_verify_email_and_be_approved_before_login(self, send_email):
@@ -205,6 +212,65 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(verified_login.status_code, 200)
         self.assertEqual(verified_login.json()["user"]["role"], "admin")
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "test-secret",
+            "SMTP_FROM_EMAIL": "shop@example.test",
+            "CLIENT_ORIGIN": "https://shopsense.example.test",
+        },
+    )
+    @patch("analytics_api.auth_routes.smtplib.SMTP")
+    def test_verification_email_contains_frontend_link(self, smtp_class):
+        smtp = smtp_class.return_value.__enter__.return_value
+        _send_verification_email("person@example.test", "Test Person", "test-token")
+        message = smtp.send_message.call_args.args[0]
+        self.assertEqual(message["To"], "person@example.test")
+        self.assertEqual(message["From"], "shop@example.test")
+        self.assertIn(
+            "https://shopsense.example.test/register?verifyEmailToken=test-token",
+            message.as_string(),
+        )
+        smtp.starttls.assert_called_once()
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_email_delivery_fails_explicitly_without_smtp_configuration(self):
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as error:
+            _send_verification_email("person@example.test", "Test Person", "test-token")
+        self.assertEqual(error.exception.status_code, 503)
+
+    @patch.dict(
+        os.environ,
+        {
+            "BOOTSTRAP_ADMIN_EMAIL": "owner@example.com",
+            "BOOTSTRAP_ADMIN_NAME": "Store Owner",
+            "BOOTSTRAP_ADMIN_PASSWORD": "owner-unique-password",
+        },
+    )
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_bootstrap_creates_real_admin_alongside_unverified_legacy_admin(self, send_email):
+        send_email.side_effect = self.capture_email
+        self.db.execute(
+            "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
+            ("Demo Admin", "admin@demo.com", "old-hash"),
+        )
+
+        response = await self.client.post("/api/auth/bootstrap-admin")
+
+        self.assertEqual(response.status_code, 201)
+        account = self.db.execute(
+            "SELECT name, email_verified FROM admins WHERE email = ?",
+            ("owner@example.com",),
+        ).fetchone()
+        self.assertEqual(account["name"], "Store Owner")
+        self.assertEqual(account["email_verified"], 0)
+        self.assertEqual(self.sent_tokens[0][0], "owner@example.com")
 
 
 if __name__ == "__main__":
