@@ -45,10 +45,10 @@ CATEGORY_TERMS = {
 }
 
 PRODUCT_KINDS = (
+    ("backpack", re.compile(r"\bbackpacks?\b", re.I)),
     ("laptop", re.compile(r"\b(?:laptops?|notebooks?)\b", re.I)),
     ("headphones", re.compile(r"\b(?:headphones?|headsets?|earbuds?|earphones?)\b", re.I)),
     ("speaker", re.compile(r"\b(?:speakers?|soundbars?)\b", re.I)),
-    ("backpack", re.compile(r"\bbackpacks?\b", re.I)),
     ("yoga mat", re.compile(r"\byoga\s+mats?\b", re.I)),
     ("dumbbell", re.compile(r"\bdumbbells?\b", re.I)),
     ("water bottle", re.compile(r"\bwater\s+bottles?\b", re.I)),

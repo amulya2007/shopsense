@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+import httpx
 from jose import jwt
 
 from analytics_api import ai_rag, main
@@ -132,7 +132,7 @@ class PythonGenerationTests(unittest.IsolatedAsyncioTestCase):
             db.close()
 
 
-class PythonAiEndpointTests(unittest.TestCase):
+class PythonAiEndpointTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp_directory = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp_directory.name) / "shopsense.db"
@@ -141,8 +141,6 @@ class PythonAiEndpointTests(unittest.TestCase):
         connection.backup(disk_connection)
         disk_connection.close()
         connection.close()
-        self.client = TestClient(main.app)
-
     def tearDown(self):
         self.temp_directory.cleanup()
 
@@ -157,7 +155,7 @@ class PythonAiEndpointTests(unittest.TestCase):
             algorithm="HS256",
         )
 
-    def test_vendor_token_controls_catalog_scope_and_response_shape(self):
+    async def test_vendor_token_controls_catalog_scope_and_response_shape(self):
         headers = {"Authorization": f"Bearer {self._token(1, 'vendor')}"}
         body = {
             "question": "Show my products",
@@ -167,7 +165,11 @@ class PythonAiEndpointTests(unittest.TestCase):
         with patch.object(main, "DB_PATH", self.db_path), patch.dict(
             os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""}
         ):
-            response = self.client.post("/ai/shopping-assistant", headers=headers, json=body)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=main.app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post("/ai/shopping-assistant", headers=headers, json=body)
 
         self.assertEqual(response.status_code, 200)
         result = response.json()
@@ -176,14 +178,18 @@ class PythonAiEndpointTests(unittest.TestCase):
         self.assertTrue(all(product["vendorId"] == 1 for product in result["products"]))
         self.assertNotIn("Yoga Starter Mat", [product["name"] for product in result["products"]])
 
-    def test_admin_must_select_a_vendor(self):
+    async def test_admin_must_select_a_vendor(self):
         headers = {"Authorization": f"Bearer {self._token(5, 'admin')}"}
         with patch.object(main, "DB_PATH", self.db_path):
-            response = self.client.post(
-                "/ai/shopping-assistant",
-                headers=headers,
-                json={"question": "Show products"},
-            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=main.app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/ai/shopping-assistant",
+                    headers=headers,
+                    json={"question": "Show products"},
+                )
 
         self.assertEqual(response.status_code, 400)
 

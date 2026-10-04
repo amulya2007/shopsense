@@ -54,7 +54,7 @@ def get_db():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Database not found at {DB_PATH}. Start the Express server first.",
         )
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
