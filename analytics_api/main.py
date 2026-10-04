@@ -29,8 +29,8 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
 _THIS_DIR = Path(__file__).parent
-load_dotenv(_THIS_DIR.parent / "server" / ".env")
 load_dotenv(_THIS_DIR.parent / ".env")
+load_dotenv(_THIS_DIR.parent / "server" / ".env")
 
 if __package__:
     from . import ai_rag

@@ -24,8 +24,8 @@ os.chdir(PROJECT_ROOT)
 
 from dotenv import load_dotenv
 
-load_dotenv(PROJECT_ROOT / "server" / ".env")
 load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(PROJECT_ROOT / "server" / ".env")
 
 import uvicorn
 
