@@ -360,20 +360,26 @@ def format_grounded_answer(question: str, results: dict[str, Any]) -> str:
 
 
 def _configured_provider() -> tuple[str | None, str | None]:
+    providers = _configured_providers()
+    return providers[0] if providers else (None, None)
+
+
+def _configured_providers() -> list[tuple[str, str]]:
+    providers = []
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("LLM_API_KEY")
     if gemini_key and gemini_key.strip() and not gemini_key.strip().lower().startswith("your_"):
-        return "Gemini", gemini_key.strip()
+        providers.append(("Gemini", gemini_key.strip()))
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key and openai_key.strip() and not openai_key.strip().lower().startswith("your_"):
-        return "OpenAI", openai_key.strip()
-    return None, None
+        providers.append(("OpenAI", openai_key.strip()))
+    return providers
 
 
 async def generate_answer(question: str, results: dict[str, Any]) -> tuple[str, str]:
     """Generate from retrieved facts using Python HTTP clients, or fall back locally."""
-    provider, api_key = _configured_provider()
+    configured_provider, _api_key = _configured_provider()
     fallback = format_grounded_answer(question, results)
-    if not provider or not api_key or not results["products"]:
+    if not configured_provider or not results["products"]:
         return fallback, "Python Grounded Catalog RAG (Local)"
 
     context = [
@@ -393,7 +399,7 @@ async def generate_answer(question: str, results: dict[str, Any]) -> tuple[str, 
 
     generated = await _generate_text(system_prompt, user_prompt)
     if generated and generated[0]:
-        return generated[0], f"{provider} + Python RAG"
+        return generated[0], f"{generated[1]} + Python RAG"
 
     return fallback, "Python Grounded Catalog RAG (Local)"
 
@@ -404,61 +410,62 @@ async def _generate_text(
     max_tokens: int = 900,
     json_response: bool = False,
 ) -> tuple[str | None, str | None]:
-    provider, api_key = _configured_provider()
-    if not provider or not api_key:
+    providers = _configured_providers()
+    if not providers:
         return None, None
 
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            if provider == "Gemini":
-                generation_config: dict[str, Any] = {"maxOutputTokens": max_tokens}
-                if json_response:
-                    generation_config["responseMimeType"] = "application/json"
-                response = await client.post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-                    params={"key": api_key},
-                    json={
-                        "contents": [{"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
-                        "generationConfig": generation_config,
-                    },
-                )
-                response.raise_for_status()
-                generated = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
-            else:
-                payload: dict[str, Any] = {
-                    "model": "gpt-4o-mini",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": max_tokens,
-                }
-                if json_response:
-                    payload["response_format"] = {"type": "json_object"}
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    json=payload,
-                )
-                response.raise_for_status()
-                generated = response.json().get("choices", [{}])[0].get("message", {}).get("content")
-        if isinstance(generated, str) and generated.strip():
-            return generated.strip(), provider
-        logger.warning("%s returned an empty response; using the grounded local result.", provider)
-    except httpx.HTTPStatusError as error:
-        logger.warning(
-            "%s returned HTTP %s; using the grounded local result.",
-            provider,
-            error.response.status_code,
-        )
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
-        logger.warning(
-            "%s request failed (%s); using the grounded local result.",
-            provider,
-            type(error).__name__,
-        )
-    return None, provider
+    for provider, api_key in providers:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
+                if provider == "Gemini":
+                    generation_config: dict[str, Any] = {"maxOutputTokens": max_tokens}
+                    if json_response:
+                        generation_config["responseMimeType"] = "application/json"
+                    response = await client.post(
+                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                        params={"key": api_key},
+                        json={
+                            "contents": [{"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
+                            "generationConfig": generation_config,
+                        },
+                    )
+                    response.raise_for_status()
+                    generated = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+                else:
+                    payload: dict[str, Any] = {
+                        "model": "gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": max_tokens,
+                    }
+                    if json_response:
+                        payload["response_format"] = {"type": "json_object"}
+                    response = await client.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    generated = response.json().get("choices", [{}])[0].get("message", {}).get("content")
+            if isinstance(generated, str) and generated.strip():
+                return generated.strip(), provider
+            logger.warning("%s returned an empty response; trying the next provider.", provider)
+        except httpx.HTTPStatusError as error:
+            logger.warning(
+                "%s returned HTTP %s; trying the next provider.",
+                provider,
+                error.response.status_code,
+            )
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+            logger.warning(
+                "%s request failed (%s); trying the next provider.",
+                provider,
+                type(error).__name__,
+            )
+    return None, None
 
 
 def _clean_text(value: Any, limit: int) -> str:
