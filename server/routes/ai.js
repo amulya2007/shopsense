@@ -16,7 +16,10 @@ async function forwardToPythonAi(req, res, route, body) {
     });
     const result = await response.json();
     if (!response.ok) {
-      const message = result.detail || result.error || "The Python AI service could not process the request.";
+      const detail = result?.detail || result?.error;
+      const message = Array.isArray(detail)
+        ? detail.map((item) => item.msg || "Invalid request.").join(" ")
+        : detail || "The Python AI service could not process the request.";
       return res.status(response.status).json({ error: message });
     }
     return res.json(result);
@@ -112,37 +115,32 @@ router.post("/generate-seo-content", requireAuth(["vendor", "admin"]), async (re
  *   ]
  */
 router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req, res) => {
-  const { question, conversationHistory } = req.body;
+  const { question, conversationHistory } = req.body || {};
 
-    if (!question || typeof question !== "string" || !question.trim()) {
+  if (!question || typeof question !== "string" || !question.trim()) {
+    return res.status(400).json({
+      error: "Please provide a valid question in the request body."
+    });
+  }
+
+  if (question.trim().length > 500) {
+    return res.status(400).json({
+      error: "Question is too long. Please keep it under 500 characters."
+    });
+  }
+
+  const history = Array.isArray(conversationHistory) ? conversationHistory.slice(-4) : [];
+  let vendorId;
+  if (req.user.role === "vendor") {
+    vendorId = Number(req.user.id);
+  } else {
+    vendorId = Number(req.body?.vendorId);
+    if (!Number.isInteger(vendorId) || vendorId <= 0) {
       return res.status(400).json({
-        error: "Please provide a valid question in the request body."
+        error: "vendorId is required when an administrator uses the shopping assistant."
       });
     }
-
-    if (question.trim().length > 500) {
-      return res.status(400).json({
-        error: "Question is too long. Please keep it under 500 characters."
-      });
-    }
-
-    // Accept optional conversation history for follow-up context.
-    const history = Array.isArray(conversationHistory) ? conversationHistory.slice(-4) : [];
-
-    // Never trust a browser-supplied vendor ID for vendor accounts. The vendor
-    // ID is the authenticated vendor's primary key in the signed JWT.
-    let vendorId;
-    if (req.user.role === "vendor") {
-      vendorId = Number(req.user.id);
-    } else {
-      const requestedVendorId = req.body.vendorId;
-      vendorId = Number(requestedVendorId);
-      if (!Number.isInteger(vendorId) || vendorId <= 0) {
-        return res.status(400).json({
-          error: "vendorId is required when an administrator uses the shopping assistant."
-        });
-      }
-    }
+  }
 
   return forwardToPythonAi(req, res, "/ai/shopping-assistant", {
     question: question.trim(),

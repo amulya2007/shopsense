@@ -27,6 +27,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
+if __package__:
+    from . import ai_rag
+else:
+    import ai_rag
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -187,7 +192,7 @@ app.add_middleware(
         "https://shopsense-client.onrender.com",
     ],
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -204,12 +209,6 @@ def health_check():
 # ---------------------------------------------------------------------------
 # Python-native, vendor-scoped retrieval-augmented generation
 # ---------------------------------------------------------------------------
-
-try:
-    from . import ai_rag
-except ImportError:
-    import ai_rag
-
 
 def _assistant_vendor_id(user: TokenPayload, requested_vendor_id: int | None) -> int:
     if user.role == "vendor":

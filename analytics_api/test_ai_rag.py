@@ -191,7 +191,7 @@ class PythonGenerationTests(unittest.IsolatedAsyncioTestCase):
             db.close()
 
     async def test_grounded_description_and_seo_fields_work_without_a_provider(self):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""}):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": "", "LLM_API_KEY": ""}):
             description = await ai_rag.generate_product_description(
                 "Flex Yoga Mat", "Sports", "Comfortable surface for yoga."
             )
@@ -246,7 +246,7 @@ class PythonAiEndpointTests(unittest.IsolatedAsyncioTestCase):
             "conversationHistory": [],
         }
         with patch.object(main, "DB_PATH", self.db_path), patch.dict(
-            os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""}
+            os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": "", "LLM_API_KEY": ""}
         ):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=main.app),
@@ -278,7 +278,7 @@ class PythonAiEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_python_seo_endpoint_validates_auth_and_returns_expected_fields(self):
         headers = {"Authorization": f"Bearer {self._token(1, 'vendor')}"}
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""}):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": "", "LLM_API_KEY": ""}):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=main.app),
                 base_url="http://test",
