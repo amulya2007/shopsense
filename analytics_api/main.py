@@ -555,8 +555,8 @@ else:
     from vendor_routes import router as vendor_router
 
 app.include_router(auth_router)
-app.include_router(admin_router)
-app.include_router(market_analytics_router)
+app.include_router(admin_router, prefix="/admin")
+app.include_router(market_analytics_router, prefix="/analytics")
 app.include_router(vendor_router)
 
 from fastapi.staticfiles import StaticFiles

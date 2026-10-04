@@ -30,9 +30,11 @@ load_dotenv(PROJECT_ROOT / ".env")
 import uvicorn
 
 reload = "--reload" in sys.argv[1:]
-uvicorn.run(
-    "analytics_api.main:app",
-    host=os.getenv("HOST", "0.0.0.0"),
-    port=int(os.getenv("PYTHON_API_PORT", "8000")),
-    reload=reload,
-)
+if __name__ == "__main__":
+    uvicorn.run(
+        "analytics_api.main:app",
+        app_dir=str(PROJECT_ROOT),
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PYTHON_API_PORT", "8000")),
+        reload=reload,
+    )
