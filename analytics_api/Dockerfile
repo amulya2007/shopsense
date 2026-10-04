@@ -4,6 +4,8 @@ WORKDIR /app
 COPY analytics_api/requirements.txt ./analytics_api/requirements.txt
 RUN pip install --no-cache-dir -r analytics_api/requirements.txt
 COPY analytics_api ./analytics_api
+COPY dataset ./dataset
+RUN mkdir -p /app/server/db /app/server/uploads
 
 EXPOSE 8000
 CMD ["uvicorn", "analytics_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

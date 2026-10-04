@@ -1,18 +1,19 @@
-version: "3.8"
-
 services:
-  ai:
+  api:
     build:
       context: .
-      dockerfile: analytics_api/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
+      HOST: 0.0.0.0
+      PORT: 8000
       DB_PATH: /app/server/db/shopsense.db
     volumes:
       - ./server/db:/app/server/db
+      - ./server/uploads:/app/server/uploads
     healthcheck:
       test:
         - CMD
@@ -22,21 +23,4 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "4000:4000"
-    env_file:
-      - .env
-    environment:
-      AI_SERVICE_URL: http://ai:8000
-    volumes:
-      - ./server/db:/app/server/db
-    depends_on:
-      ai:
-        condition: service_healthy
     restart: unless-stopped

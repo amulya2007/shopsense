@@ -1,17 +1,13 @@
-FROM node:20-alpine AS builder
+FROM python:3.12-slim
+
 WORKDIR /app
+COPY analytics_api/requirements.txt ./analytics_api/requirements.txt
+RUN pip install --no-cache-dir -r analytics_api/requirements.txt
+COPY analytics_api ./analytics_api
+COPY dataset ./dataset
+RUN mkdir -p /app/server/db /app/server/uploads
 
-# Install production dependencies only
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
-# Copy source code
-COPY . .
-
-# Production image
-FROM node:20-alpine
-WORKDIR /app
-COPY --from=builder /app .
-ENV NODE_ENV=production
-EXPOSE 4000
-CMD ["node", "server/index.js"]
+ENV HOST=0.0.0.0
+ENV PORT=8000
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "analytics_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

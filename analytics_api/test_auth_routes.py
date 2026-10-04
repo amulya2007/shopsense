@@ -1,0 +1,179 @@
+import sqlite3
+import unittest
+from unittest.mock import patch
+
+import httpx
+
+from analytics_api import main
+from analytics_api.auth_routes import _send_verification_email
+
+
+def make_auth_database():
+    connection = sqlite3.connect(":memory:", check_same_thread=False)
+    connection.row_factory = sqlite3.Row
+    connection.executescript(
+        """
+        CREATE TABLE admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            email_verified INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE vendors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            business_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            phone TEXT,
+            business_address TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+            email_verified INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE email_verifications (
+            account_type TEXT NOT NULL,
+            account_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            sent_at TEXT NOT NULL,
+            verified_at TEXT,
+            PRIMARY KEY (account_type, account_id)
+        );
+        """
+    )
+    return connection
+
+
+class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.db = make_auth_database()
+        self.sent_tokens = []
+
+        def override_db():
+            yield self.db
+
+        main.app.dependency_overrides[main.get_db] = override_db
+        self.client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=main.app),
+            base_url="http://test",
+        )
+
+    async def tearDown(self):
+        await self.client.aclose()
+        main.app.dependency_overrides.pop(main.get_db, None)
+        self.db.close()
+
+    def capture_email(self, email, _name, token):
+        self.sent_tokens.append((email, token))
+
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_vendor_must_verify_email_and_be_approved_before_login(self, send_email):
+        send_email.side_effect = self.capture_email
+        registration = await self.client.post(
+            "/api/auth/register",
+            json={
+                "fullName": "Casey Vendor",
+                "businessName": "Casey Goods",
+                "email": "CASEY@example.com",
+                "password": "correct-horse-battery",
+            },
+        )
+        self.assertEqual(registration.status_code, 201)
+        self.assertEqual(self.sent_tokens[0][0], "casey@example.com")
+        self.assertEqual(
+            self.db.execute("SELECT email_verified FROM vendors").fetchone()["email_verified"],
+            0,
+        )
+
+        login_before_verification = await self.client.post(
+            "/api/auth/login",
+            json={"email": "casey@example.com", "password": "correct-horse-battery", "role": "vendor"},
+        )
+        self.assertEqual(login_before_verification.status_code, 403)
+        self.assertEqual(login_before_verification.headers.get("x-email-verification-required"), "true")
+
+        verification = await self.client.post(
+            "/api/auth/verify-email",
+            json={"token": self.sent_tokens[0][1]},
+        )
+        self.assertEqual(verification.status_code, 200)
+
+        awaiting_approval = await self.client.post(
+            "/api/auth/login",
+            json={"email": "casey@example.com", "password": "correct-horse-battery", "role": "vendor"},
+        )
+        self.assertEqual(awaiting_approval.status_code, 403)
+        self.assertIn("awaiting admin approval", awaiting_approval.json()["error"])
+
+        self.db.execute("UPDATE vendors SET status = 'approved'")
+        approved_login = await self.client.post(
+            "/api/auth/login",
+            json={"email": "casey@example.com", "password": "correct-horse-battery", "role": "vendor"},
+        )
+        self.assertEqual(approved_login.status_code, 200)
+        self.assertEqual(approved_login.json()["user"]["role"], "vendor")
+        self.assertIn("token", approved_login.json())
+
+        repeated_verification = await self.client.post(
+            "/api/auth/verify-email",
+            json={"token": self.sent_tokens[0][1]},
+        )
+        self.assertEqual(repeated_verification.status_code, 200)
+
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_invalid_email_is_rejected_without_creating_an_account(self, send_email):
+        response = await self.client.post(
+            "/api/auth/register",
+            json={
+                "fullName": "Invalid Person",
+                "businessName": "Invalid Goods",
+                "email": "not-an-email",
+                "password": "correct-horse-battery",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM vendors").fetchone()[0], 0)
+        send_email.assert_not_called()
+
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_mail_failure_rolls_back_registration(self, send_email):
+        from fastapi import HTTPException
+
+        send_email.side_effect = HTTPException(status_code=503, detail="Mail unavailable.")
+        response = await self.client.post(
+            "/api/auth/register",
+            json={
+                "fullName": "Casey Vendor",
+                "businessName": "Casey Goods",
+                "email": "casey@example.com",
+                "password": "correct-horse-battery",
+            },
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM vendors").fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM email_verifications").fetchone()[0], 0)
+
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_existing_unverified_admin_can_request_verification(self, send_email):
+        send_email.side_effect = self.capture_email
+        self.db.execute(
+            "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
+            ("Admin Person", "admin@example.com", "unused"),
+        )
+        response = await self.client.post(
+            "/api/auth/resend-verification",
+            json={"email": "admin@example.com", "role": "admin"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.sent_tokens[0][0], "admin@example.com")
+        verified = await self.client.post(
+            "/api/auth/verify-email",
+            json={"token": self.sent_tokens[0][1]},
+        )
+        self.assertEqual(verified.status_code, 200)
+
+
+if __name__ == "__main__":
+    unittest.main()

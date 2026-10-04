@@ -21,14 +21,17 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
 _THIS_DIR = Path(__file__).parent
 load_dotenv(_THIS_DIR.parent / "server" / ".env")
+load_dotenv(_THIS_DIR.parent / ".env")
 
 if __package__:
     from . import ai_rag
@@ -180,11 +183,34 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:4000",
         "https://shopsense-client.onrender.com",
+        os.getenv("CLIENT_ORIGIN", ""),
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_error_response(_request: Request, exc: HTTPException):
+    message = exc.detail if isinstance(exc.detail, str) else "Unable to process this request."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": message},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_response(_request: Request, exc: RequestValidationError):
+    messages = [
+        str(error.get("msg", "Invalid request.")).removeprefix("Value error, ")
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": " ".join(messages) or "Invalid request."},
+    )
 
 
 @app.middleware("http")

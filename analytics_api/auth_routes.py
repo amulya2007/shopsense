@@ -368,14 +368,15 @@ def bootstrap_admin(db: DBConn) -> dict[str, str]:
     """Create the first admin from environment credentials; the email still must be verified."""
     if db.execute("SELECT 1 FROM admins LIMIT 1").fetchone():
         raise HTTPException(status_code=409, detail="An administrator is already configured.")
-    email = _normalize_email(os.getenv("BOOTSTRAP_ADMIN_EMAIL", ""))
+    raw_email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip()
     name = os.getenv("BOOTSTRAP_ADMIN_NAME", "").strip() or "ShopSense Administrator"
     password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
-    if not password:
+    if not raw_email or not password:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD before bootstrapping an administrator.",
         )
+    email = _normalize_email(raw_email)
     if len(password) < 12 or len(password.encode("utf-8")) > 72:
         raise HTTPException(
             status_code=400,
