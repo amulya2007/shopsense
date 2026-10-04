@@ -28,6 +28,12 @@ link that expires after 30 minutes; malformed addresses and unverified accounts 
 New vendor applications also require the existing administrator approval after email
 verification.
 
+For local testing without SMTP, explicitly set `APP_ENV=development`,
+`EMAIL_DELIVERY_MODE=console`, and `ALLOW_DEV_EMAIL_PREVIEW=true` in the ignored root
+`.env`, then restart the API. Registration displays a local verification link and the API
+logs it; no message is sent. This mode is rejected whenever production is indicated and
+is disabled by default. Keep production on `EMAIL_DELIVERY_MODE=smtp`.
+
 Set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, and a unique
 `BOOTSTRAP_ADMIN_PASSWORD` (12-72 bytes) in `.env`, then make the one-time request:
 
