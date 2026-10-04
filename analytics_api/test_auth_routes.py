@@ -7,7 +7,11 @@ import httpx
 import bcrypt
 
 from analytics_api import main
-from analytics_api.auth_routes import _send_verification_email, _smtp_settings
+from analytics_api.auth_routes import (
+    _send_verification_email,
+    _smtp_settings,
+    log_email_configuration,
+)
 
 
 def make_auth_database():
@@ -234,6 +238,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             "SMTP_USERNAME": "shop@example.test",
             "SMTP_PASSWORD": "test-secret",
             "SMTP_FROM_EMAIL": "shop@example.test",
+            "SMTP_USE_SSL": "false",
             "CLIENT_ORIGIN": "https://shopsense.example.test",
         },
     )
@@ -257,6 +262,92 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as error:
             _send_verification_email("person@example.test", "Test Person", "test-token")
         self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("SMTP_USERNAME", error.exception.detail)
+        self.assertIn("SMTP_PASSWORD", error.exception.detail)
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "secret-that-must-not-be-logged",
+            "SMTP_FROM": "preferred@example.test",
+            "SMTP_FROM_EMAIL": "legacy@example.test",
+        },
+        clear=True,
+    )
+    def test_smtp_from_precedes_legacy_sender_alias(self):
+        self.assertEqual(_smtp_settings()[4], "preferred@example.test")
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "secret-that-must-not-be-logged",
+            "SMTP_FROM": "shop@example.test",
+        },
+        clear=True,
+    )
+    def test_smtp_readiness_log_never_contains_credentials(self):
+        with self.assertLogs("analytics_api.auth_routes", level="INFO") as captured:
+            log_email_configuration()
+        output = "\n".join(captured.output)
+        self.assertIn("SMTP configuration detected", output)
+        self.assertNotIn("secret-that-must-not-be-logged", output)
+        self.assertNotIn("shop@example.test", output)
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_missing_smtp_configuration_logs_warning_without_stopping_startup(self):
+        with self.assertLogs("analytics_api.auth_routes", level="WARNING") as captured:
+            log_email_configuration()
+        self.assertIn("SMTP configuration unavailable", "\n".join(captured.output))
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "secret-that-must-not-be-logged",
+            "SMTP_FROM": "shop@example.test",
+            "CLIENT_ORIGIN": "https://shopsense.example.test",
+        },
+        clear=True,
+    )
+    @patch("analytics_api.auth_routes.smtplib.SMTP")
+    def test_delivery_logs_attempt_and_success_without_password(self, smtp_class):
+        with self.assertLogs("analytics_api.auth_routes", level="INFO") as captured:
+            _send_verification_email("person@example.test", "Test Person", "test-token")
+        output = "\n".join(captured.output)
+        self.assertIn("Attempting verification email delivery", output)
+        self.assertIn("Verification email delivered successfully", output)
+        self.assertNotIn("secret-that-must-not-be-logged", output)
+        smtp_class.return_value.__enter__.return_value.starttls.assert_called_once()
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "secret-that-must-not-be-logged",
+            "SMTP_FROM": "shop@example.test",
+        },
+        clear=True,
+    )
+    @patch("analytics_api.auth_routes.smtplib.SMTP", side_effect=OSError("connection refused"))
+    def test_delivery_failure_is_logged_without_password(self, _smtp_class):
+        from fastapi import HTTPException
+
+        with self.assertLogs("analytics_api.auth_routes", level="ERROR") as captured:
+            with self.assertRaises(HTTPException):
+                _send_verification_email("person@example.test", "Test Person", "test-token")
+        output = "\n".join(captured.output)
+        self.assertIn("Verification email delivery failed", output)
+        self.assertNotIn("secret-that-must-not-be-logged", output)
 
     @patch.dict(
         os.environ,

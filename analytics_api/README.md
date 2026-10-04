@@ -21,8 +21,9 @@ environment when it exists.
 
 ## Email verification and accounts
 
-Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD`. `SMTP_FROM_EMAIL` is optional and defaults to `SMTP_USERNAME`.
-Gmail users must use an app password. Email ownership is proven by a one-time verification
+Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD`. Gmail requires a Google
+App Password, not the regular account password. `SMTP_FROM` is optional and defaults to
+`SMTP_USERNAME`; `SMTP_FROM_EMAIL` is supported as a legacy alias. Email ownership is proven by a one-time verification
 link that expires after 30 minutes; malformed addresses and unverified accounts cannot log in.
 New vendor applications also require the existing administrator approval after email
 verification.

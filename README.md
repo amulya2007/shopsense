@@ -83,7 +83,7 @@ npm run dev
 
 This starts the Python API at `http://localhost:8000`; no Node/Express backend is used. The API initializes SQLite on first run and imports the historical XLSX dataset.
 
-Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in the root `.env`. Root `.env` values take precedence over legacy `server/.env` values. `SMTP_FROM_EMAIL` defaults to `SMTP_USERNAME` when left blank. Gmail requires an app password; do not put credentials in frontend code or commit them.
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in the root `.env`. Root `.env` values take precedence over legacy `server/.env` values. Gmail requires 2-Step Verification and a Google App Password; use that in `SMTP_PASSWORD`, not your regular account password. `SMTP_FROM` is optional and defaults to `SMTP_USERNAME`; `SMTP_FROM_EMAIL` remains supported as a legacy alias. Never put credentials in frontend code or commit them.
 
 To create the first administrator, set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, and a unique `BOOTSTRAP_ADMIN_PASSWORD` in `.env`, then call the one-time bootstrap endpoint:
 
@@ -110,7 +110,7 @@ After installing backend and frontend dependencies and configuring `.env`, start
 npm run local
 ```
 
-This runs the FastAPI backend and Vite frontend together. Open the frontend URL printed by Vite (normally `http://localhost:5173`). Keep the terminal open while using the app; press `Ctrl+C` to stop both services.
+This runs the FastAPI backend and Vite frontend together. Open `http://localhost:5173`. Vite is configured to fail instead of silently choosing another port, so the verification link always points at the running local frontend. If port 5173 is busy, stop the process using it and rerun the command. Keep the terminal open while using the app; press `Ctrl+C` to stop both services.
 
 To run only the backend, use `npm run dev`. To run only the frontend, use the commands below in a separate terminal.
 
@@ -161,7 +161,7 @@ JWT_SECRET=your_production_secret_here
 | `SMTP_PORT` | Required for registration | SMTP port (587 with STARTTLS; 465 with SSL) |
 | `SMTP_USERNAME` | Required for registration | SMTP account username |
 | `SMTP_PASSWORD` | Required for registration | SMTP account password/app password |
-| `SMTP_FROM_EMAIL` | Optional | Sender address (defaults to `SMTP_USERNAME`) |
+| `SMTP_FROM` | Optional | Sender address (defaults to `SMTP_USERNAME`; `SMTP_FROM_EMAIL` is a legacy alias) |
 | `BOOTSTRAP_ADMIN_EMAIL` | Initial setup | Email address for the first administrator |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial setup | Unique 12-72 byte password for the first administrator |
 

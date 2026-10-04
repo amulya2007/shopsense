@@ -2,6 +2,7 @@
 
 import hashlib
 import html
+import logging
 import os
 import secrets
 import smtplib
@@ -20,6 +21,7 @@ from .main import DBConn, JWT_ALGORITHM, JWT_SECRET
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 VERIFICATION_TTL = timedelta(minutes=30)
 RESEND_COOLDOWN = timedelta(seconds=60)
 
@@ -63,7 +65,11 @@ def _smtp_settings() -> tuple[str, int, str, str, str, bool]:
     host = os.getenv("SMTP_HOST", "").strip()
     username = os.getenv("SMTP_USERNAME", "").strip()
     password = os.getenv("SMTP_PASSWORD", "")
-    sender = os.getenv("SMTP_FROM_EMAIL", "").strip() or username
+    sender = (
+        os.getenv("SMTP_FROM", "").strip()
+        or os.getenv("SMTP_FROM_EMAIL", "").strip()
+        or username
+    )
     if not all((host, username, password, sender)):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -86,6 +92,18 @@ def _smtp_settings() -> tuple[str, int, str, str, str, bool]:
         )
     use_ssl = os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "yes"}
     return host, port, username, password, sender, use_ssl
+
+
+def log_email_configuration() -> None:
+    """Report SMTP readiness without logging credentials or mailbox names."""
+    try:
+        host, port, _username, _password, _sender, use_ssl = _smtp_settings()
+    except HTTPException as exc:
+        logger.warning("SMTP configuration unavailable: %s", exc.detail)
+        return
+
+    transport = "implicit TLS" if use_ssl else "STARTTLS"
+    logger.info("SMTP configuration detected (host=%s port=%s transport=%s)", host, port, transport)
 
 
 def _send_verification_email(email: str, name: str, token: str) -> None:
@@ -114,6 +132,8 @@ def _send_verification_email(email: str, name: str, token: str) -> None:
         subtype="html",
     )
 
+    transport = "implicit TLS" if use_ssl else "STARTTLS"
+    logger.info("Attempting verification email delivery (host=%s port=%s transport=%s)", host, port, transport)
     try:
         if use_ssl:
             with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=15) as client:
@@ -126,8 +146,9 @@ def _send_verification_email(email: str, name: str, token: str) -> None:
                 client.ehlo()
                 client.login(username, password)
                 client.send_message(message)
+        logger.info("Verification email delivered successfully")
     except (OSError, smtplib.SMTPException) as exc:
-        print(f"[ShopSense Auth] Could not send verification email: {exc}")
+        logger.error("Verification email delivery failed (error_type=%s)", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="We could not send the verification email. Please try again later.",
