@@ -53,7 +53,7 @@ if (!existsSync(viteEntry)) {
   process.exit(1);
 }
 
-console.log("[ShopSense] Starting API at http://127.0.0.1:8000 and frontend at http://localhost:5173");
+console.log("[ShopSense] Starting API at http://127.0.0.1:8000 and the frontend (Vite prints its URL below).");
 start("API", python, [resolve(projectRoot, "scripts/start_api.py"), "--reload"]);
 start("frontend", process.execPath, [viteEntry, "--host", "127.0.0.1"], {
   cwd: resolve(projectRoot, "client"),

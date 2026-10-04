@@ -102,7 +102,19 @@ docker compose up --build
 
 Docker Compose runs the single Python backend and persists its SQLite database and uploads.
 
-### 3. Frontend
+### 3. Start the full local app
+
+After installing backend and frontend dependencies and configuring `.env`, start both services from the repository root:
+
+```powershell
+npm run local
+```
+
+This runs the FastAPI backend and Vite frontend together. Open the frontend URL printed by Vite (normally `http://localhost:5173`). Keep the terminal open while using the app; press `Ctrl+C` to stop both services.
+
+To run only the backend, use `npm run dev`. To run only the frontend, use the commands below in a separate terminal.
+
+### 4. Frontend only
 
 From the repository root in a new terminal:
 
