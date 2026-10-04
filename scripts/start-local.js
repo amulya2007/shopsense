@@ -20,7 +20,6 @@ const aiServiceUrl = (process.env.AI_SERVICE_URL || defaultPythonUrl).replace(/\
 const pythonServiceUrl = new URL(aiServiceUrl);
 const isLocalPython = ["localhost", "127.0.0.1", "::1"].includes(pythonServiceUrl.hostname);
 const aiPort = process.env.PYTHON_AI_PORT || pythonServiceUrl.port || "8000";
-const pythonModule = process.env.PYTHON_EXECUTABLE || process.env.PYTHON || "python";
 const watchServer = process.argv.includes("--watch");
 
 if (!["http:", "https:"].includes(pythonServiceUrl.protocol)) {
@@ -29,6 +28,30 @@ if (!["http:", "https:"].includes(pythonServiceUrl.protocol)) {
 
 const children = new Set();
 let shuttingDown = false;
+
+function getPythonCommand() {
+  if (process.env.PYTHON_EXECUTABLE) {
+    return { command: process.env.PYTHON_EXECUTABLE, args: [] };
+  }
+  if (process.env.PYTHON) {
+    const args = process.env.PYTHON.toLowerCase() === "py" ? ["-3"] : [];
+    return { command: process.env.PYTHON, args };
+  }
+
+  const virtualEnvs = [
+    path.join(projectRoot, ".venv"),
+    path.join(projectRoot, "analytics_api", ".venv"),
+  ];
+  for (const virtualEnv of virtualEnvs) {
+    const executable = path.join(
+      virtualEnv,
+      process.platform === "win32" ? "Scripts" : "bin",
+      process.platform === "win32" ? "python.exe" : "python"
+    );
+    if (fs.existsSync(executable)) return { command: executable, args: [] };
+  }
+  return { command: process.platform === "win32" ? "py" : "python3", args: process.platform === "win32" ? ["-3"] : [] };
+}
 
 function stopChildren(exitCode = 0) {
   if (shuttingDown) return;
@@ -100,10 +123,10 @@ async function main() {
       console.log(`[ShopSense] Reusing Python AI service at ${aiServiceUrl}`);
     } else {
       console.log("[ShopSense] Starting the Python AI service...");
-      const moduleArgs = pythonModule.toLowerCase() === "py" ? ["-3"] : [];
+      const pythonCommand = getPythonCommand();
       pythonChild = startChild(
-        pythonModule,
-        [...moduleArgs, "-m", "uvicorn", "analytics_api.main:app", "--host", "127.0.0.1", "--port", String(aiPort)],
+        pythonCommand.command,
+        [...pythonCommand.args, "-m", "uvicorn", "analytics_api.main:app", "--host", "127.0.0.1", "--port", String(aiPort)],
         "Python AI service"
       );
       process.env.AI_SERVICE_URL = aiServiceUrl;

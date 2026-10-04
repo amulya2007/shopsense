@@ -71,17 +71,25 @@ shopsense/
 
 ## Setup
 
-### 1. Backend
+### 1. Install Python AI dependencies (one time)
 
 From the repository root:
 
-```bash
-cd server
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r analytics_api\requirements.txt
+```
+
+The project startup script automatically uses this virtual environment to start FastAPI.
+
+### 2. Start the backend
+
+```powershell
 npm install
 npm run dev
 ```
 
-Starts the API on `http://localhost:4000`. On first run, SQLite initialises automatically with:
+This starts the Python AI service and Express API together. Express is available at `http://localhost:4000`; Python runs at `http://localhost:8000`. On first run, SQLite initializes automatically with:
 
 - Schema creation (vendors, products, sales, analytics tables)
 - Historical dataset import from `/dataset/*.xlsx`
@@ -95,21 +103,7 @@ Starts the API on `http://localhost:4000`. On first run, SQLite initialises auto
 | Admin | admin@demo.com | admin123 |
 | Vendor | vendor@demo.com | vendor123 |
 
-### 2. Python AI & Analytics Service
-
-The assistant's retrieval and response generation run in Python. In a second terminal, from the repository root:
-
-```powershell
-cd analytics_api
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-It reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. The Node API proxies the existing `/api/ai/*` endpoints to Python.
-
-To start both backend services with Docker Compose, copy the root environment template to the ignored `.env`, add any provider keys, then run Compose:
+The Python service reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. To start both backend services with Docker Compose, copy the root environment template to the ignored `.env`, add any provider keys, then run Compose:
 
 ```powershell
 Copy-Item .env.example .env
