@@ -365,8 +365,6 @@ def login(request: LoginRequest, db: DBConn) -> dict:
 @router.post("/bootstrap-admin", status_code=status.HTTP_201_CREATED)
 def bootstrap_admin(db: DBConn) -> dict[str, str]:
     """Create the first admin from environment credentials; the email still must be verified."""
-    if db.execute("SELECT 1 FROM admins LIMIT 1").fetchone():
-        raise HTTPException(status_code=409, detail="An administrator is already configured.")
     raw_email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip()
     name = os.getenv("BOOTSTRAP_ADMIN_NAME", "").strip() or "ShopSense Administrator"
     password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
@@ -381,11 +379,26 @@ def bootstrap_admin(db: DBConn) -> dict[str, str]:
             status_code=400,
             detail="The bootstrap password must be 12-72 bytes long.",
         )
-    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode()
+    if db.execute("SELECT 1 FROM admins WHERE email_verified = 1 LIMIT 1").fetchone():
+        raise HTTPException(status_code=409, detail="A verified administrator is already configured.")
+    account = db.execute(
+        "SELECT id, password, email_verified FROM admins WHERE lower(email) = ?",
+        (email,),
+    ).fetchone()
+    if account:
+        if account["email_verified"] or not bcrypt.checkpw(
+            password.encode("utf-8"), account["password"].encode("utf-8")
+        ):
+            raise HTTPException(status_code=409, detail="The configured administrator cannot be bootstrapped.")
+        admin_id = account["id"]
+    else:
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode()
+        with db:
+            cursor = db.execute(
+                "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
+                (name, email, password_hash),
+            )
+        admin_id = cursor.lastrowid
     with db:
-        cursor = db.execute(
-            "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
-            (name, email, password_hash),
-        )
-        _issue_verification(db, "admin", cursor.lastrowid, email, name)
+        _issue_verification(db, "admin", admin_id, email, name)
     return {"message": "Administrator created. Verify its email address before signing in."}
