@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import httpx
+import bcrypt
 
 from analytics_api import main
 
@@ -172,6 +173,38 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             json={"token": self.sent_tokens[0][1]},
         )
         self.assertEqual(verified.status_code, 200)
+
+    @patch("analytics_api.auth_routes._send_verification_email")
+    async def test_unverified_admin_cannot_login_until_mailbox_is_confirmed(self, send_email):
+        send_email.side_effect = self.capture_email
+        password = "a-unique-admin-password"
+        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=4)).decode()
+        self.db.execute(
+            "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
+            ("Admin Person", "admin@example.com", password_hash),
+        )
+
+        login_before_verification = await self.client.post(
+            "/api/auth/login",
+            json={"email": "admin@example.com", "password": password, "role": "admin"},
+        )
+        self.assertEqual(login_before_verification.status_code, 403)
+        self.assertEqual(login_before_verification.headers.get("x-email-verification-required"), "true")
+
+        await self.client.post(
+            "/api/auth/resend-verification",
+            json={"email": "admin@example.com", "role": "admin"},
+        )
+        await self.client.post(
+            "/api/auth/verify-email",
+            json={"token": self.sent_tokens[0][1]},
+        )
+        verified_login = await self.client.post(
+            "/api/auth/login",
+            json={"email": "admin@example.com", "password": password, "role": "admin"},
+        )
+        self.assertEqual(verified_login.status_code, 200)
+        self.assertEqual(verified_login.json()["user"]["role"], "admin")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from pydantic import BaseModel, Field
 
-from .database import DB_PATH
 from .main import DBConn, JWT_ALGORITHM, JWT_SECRET
 
 
@@ -282,10 +281,10 @@ def resend_verification(request: ResendVerificationRequest, db: DBConn) -> dict[
     table = _account_table(request.role)
     email = _normalize_email(request.email)
     account = db.execute(
-        f"SELECT id, name AS display_name, 1 AS is_admin, email_verified FROM admins "
+        "SELECT id, name AS display_name, email_verified FROM admins "
         "WHERE lower(email) = ?"
         if table == "admins"
-        else "SELECT id, full_name AS display_name, 0 AS is_admin, email_verified FROM vendors "
+        else "SELECT id, full_name AS display_name, email_verified FROM vendors "
         "WHERE lower(email) = ?",
         (email,),
     ).fetchone()
