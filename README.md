@@ -134,7 +134,7 @@ JWT_SECRET=your_production_secret_here
 | `OPENAI_API_KEY` | Optional | OpenAI API key (used if Gemini not configured) |
 | `LLM_API_KEY` | Optional | Legacy alias for `GEMINI_API_KEY` |
 | `JWT_SECRET` | Recommended | JWT signing secret (defaults to dev value) |
-| `PORT` | Optional | Python API port (defaults to 8000) |
+| `PYTHON_API_PORT` | Optional | Python API port (defaults to 8000) |
 | `CLIENT_ORIGIN` | Optional | Additional CORS origin for production deploys |
 | `DB_PATH` | Optional | SQLite database path |
 | `SMTP_HOST` | Required for registration | SMTP mail server host |

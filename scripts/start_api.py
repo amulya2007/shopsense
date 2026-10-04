@@ -15,12 +15,17 @@ if VENV_PYTHON.is_file() and Path(sys.executable).resolve() != VENV_PYTHON.resol
 
 os.chdir(PROJECT_ROOT)
 
+from dotenv import load_dotenv
+
+load_dotenv(PROJECT_ROOT / "server" / ".env")
+load_dotenv(PROJECT_ROOT / ".env")
+
 import uvicorn
 
 reload = "--reload" in sys.argv[1:]
 uvicorn.run(
     "analytics_api.main:app",
     host=os.getenv("HOST", "0.0.0.0"),
-    port=int(os.getenv("PORT", "8000")),
+    port=int(os.getenv("PYTHON_API_PORT", "8000")),
     reload=reload,
 )
