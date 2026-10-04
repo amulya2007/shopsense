@@ -96,7 +96,7 @@ export default function Register() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] mb-2" style={{ color: "var(--primary-light)" }}>Vendor application</p>
             <h1 className="font-display text-2xl font-bold">Register your business</h1>
-            <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Complete this short form. An admin will approve your account before sign-in.</p>
+            <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Use an email address you can access. Verify it before an admin can approve your account.</p>
           </div>
         </div>
 
