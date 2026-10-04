@@ -109,7 +109,7 @@ def get_vendors(request: Request, db: AdminDB) -> list[dict[str, Any]]:
     return [dict(vendor) for vendor in rows]
 
 
-@router.put("/vendors/{vendor_id}/status")
+@router.put("/vendors/{vendor_id}/status", response_model=None)
 def update_vendor_status(
     vendor_id: str,
     db: AdminDB,

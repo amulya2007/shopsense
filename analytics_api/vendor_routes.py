@@ -1,8 +1,5 @@
 """FastAPI equivalents of the Express vendor API routes."""
 
-import asyncio
-import hashlib
-import os
 import re
 import secrets
 import sqlite3
@@ -12,7 +9,7 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 
@@ -65,15 +62,11 @@ def _db():
     try:
         connection = _open_db()
     except RuntimeError as exc:
-        raise _DatabaseUnavailable from exc
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
     try:
         yield connection
     finally:
         connection.close()
-
-
-class _DatabaseUnavailable(Exception):
-    pass
 
 
 def _user(request: Request) -> TokenPayload | JSONResponse:
@@ -174,7 +167,7 @@ def _filename(vendor_id: int, extension: str) -> str:
 async def _body(request: Request) -> dict[str, Any]:
     try:
         parsed = await request.json()
-    except (ValueError, Exception):
+    except Exception:
         return {}
     return parsed if isinstance(parsed, dict) else {}
 
@@ -668,8 +661,3 @@ async def update_profile(request: Request, db: sqlite3.Connection = Depends(_db)
         (vendor["id"],),
     ).fetchone()
     return {"message": "Profile updated", "vendor": dict(updated)}
-
-
-@router.exception_handler(_DatabaseUnavailable)
-async def database_unavailable_handler(_request: Request, _exc: _DatabaseUnavailable):
-    return _error(503, "Database unavailable")
