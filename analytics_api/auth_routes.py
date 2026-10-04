@@ -335,6 +335,12 @@ def verify_email(request: VerifyEmailRequest, db: DBConn) -> dict[str, str]:
 
 @router.post("/resend-verification")
 def resend_verification(request: ResendVerificationRequest, db: DBConn) -> dict[str, str]:
+    delivery_mode = _email_delivery_mode()
+    if delivery_mode == "smtp":
+        # Configuration is global, so report it consistently without checking
+        # whether this address belongs to an account.
+        _smtp_settings()
+
     table = _account_table(request.role)
     email = _normalize_email(request.email)
     account = db.execute(
@@ -360,11 +366,7 @@ def resend_verification(request: ResendVerificationRequest, db: DBConn) -> dict[
                 raise
             # Keep cooldown and delivery state indistinguishable from unknown accounts.
             logger.info("Verification resend was not completed (status=%s)", exc.status_code)
-    try:
-        preview_mode = _email_delivery_mode() == "console"
-    except HTTPException:
-        preview_mode = False
-    if preview_mode:
+    if delivery_mode == "console":
         message = (
             "Development email preview is active; no email was sent. "
             "If this account needs verification, its local link appears in the API terminal."

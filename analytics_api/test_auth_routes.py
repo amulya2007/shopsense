@@ -282,6 +282,19 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(expired.status_code, 400)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM email_verifications").fetchone()[0], 0)
 
+    @patch.dict(os.environ, {}, clear=True)
+    async def test_resend_reports_missing_smtp_without_disclosing_account(self):
+        self.db.execute(
+            "INSERT INTO admins (name, email, password, email_verified) VALUES (?, ?, ?, 0)",
+            ("Admin Person", "admin@example.com", "unused"),
+        )
+        known = await self.client.post("/api/auth/resend-verification", json={"email": "admin@example.com", "role": "admin"})
+        unknown = await self.client.post("/api/auth/resend-verification", json={"email": "absent@example.com", "role": "admin"})
+        self.assertEqual(known.status_code, 503)
+        self.assertEqual(unknown.status_code, 503)
+        self.assertEqual(known.json(), unknown.json())
+        self.assertIn("SMTP_USERNAME, SMTP_PASSWORD", known.json()["error"])
+
     @patch.dict(os.environ, {"APP_ENV": "production", "EMAIL_DELIVERY_MODE": "console", "ALLOW_DEV_EMAIL_PREVIEW": "true"}, clear=True)
     def test_production_rejects_development_email_preview(self):
         from fastapi import HTTPException
