@@ -113,6 +113,9 @@ npm run dev
 ```
 
 Starts the app on `http://localhost:5173`. API calls to `/api/*` are proxied to the backend automatically via Vite config.
+For local development, leave `VITE_API_URL` unset so browser requests stay same-origin and Vite forwards `/api` and `/uploads` to `http://127.0.0.1:8000`. If the frontend and API are deployed separately, set `VITE_API_URL` in the frontend hosting environment to the deployed API URL ending in `/api`.
+
+The API and frontend are separate processes: keep `npm run dev` running in the repository root and `npm run dev` running in `client`. Confirm the API responds at `http://127.0.0.1:8000/api/health` before testing the UI.
 
 ### 4. AI Provider (Optional)
 

@@ -75,6 +75,19 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
+    async def test_cors_allows_frontend_write_requests(self):
+        response = await self.client.options(
+            "/api/vendor/products/1",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "DELETE",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("access-control-allow-origin"), "http://localhost:5173")
+        self.assertIn("DELETE", response.headers.get("access-control-allow-methods", ""))
+
     @patch("analytics_api.auth_routes._send_verification_email")
     async def test_vendor_must_verify_email_and_be_approved_before_login(self, send_email):
         send_email.side_effect = self.capture_email
