@@ -14,15 +14,15 @@ ShopSense combines a live vendor catalog management system with deep analytics d
 
 | Layer | Technology |
 |---|---|
-| Backend | Node.js, Express |
-| Database | SQLite via `better-sqlite3` |
+| Marketplace API | Node.js, Express |
+| AI & analytics API | Python, FastAPI |
+| Database | Shared SQLite via `better-sqlite3` and Python's `sqlite3` |
 | Authentication | JWT (7-day), bcryptjs, RBAC |
 | Frontend | React 19, Vite, React Router v6, Tailwind CSS |
 | Icons | lucide-react |
 | Analytics data | XLSX dataset import into SQLite on first run |
-| AI / RAG Engine | In-memory vector store, cosine similarity, hybrid retrieval |
-| LLM providers | Google Gemini, OpenAI (optional — graceful local fallback) |
-| Optional microservice | FastAPI analytics microservice (read-only, separate port) |
+| AI / RAG Engine | Python hybrid vector retrieval with vendor-scoped SQLite grounding |
+| LLM providers | Google Gemini, OpenAI (optional — grounded Python fallback) |
 
 ---
 
@@ -43,7 +43,7 @@ shopsense/
 │   │   │                     forecasting, benchmarking, CSV exports
 │   │   └── ai.js             RAG shopping assistant endpoints
 │   └── services/
-│       └── ragService.js     Vector store, hybrid retrieval, LLM integration
+│       └── ragService.js     Product copy generation helpers
 │
 ├── client/                   React app (port 5173)
 │   └── src/
@@ -54,9 +54,11 @@ shopsense/
 │       ├── context/          AuthContext (JWT session)
 │       └── lib/              Axios API client, currency formatter
 │
-├── analytics_api/            Optional FastAPI microservice (port 8000)
-│   ├── main.py               Summary, sales-over-time, top-products endpoints
-│   └── README.md
+├── analytics_api/            Python FastAPI AI + analytics service (port 8000)
+│   ├── main.py               JWT-protected AI and analytics endpoints
+│   ├── ai_rag.py             Python retrieval, constraints, and LLM generation
+│   ├── requirements.txt
+│   └── Dockerfile
 │
 └── dataset/                  Source XLSX files (imported once into SQLite)
     ├── products_1.xlsx
@@ -81,7 +83,7 @@ Starts the API on `http://localhost:4000`. On first run, SQLite initialises auto
 
 - Schema creation (vendors, products, sales, analytics tables)
 - Historical dataset import from `/dataset/*.xlsx`
-- Isolated RAG indexes built from each vendor's live catalog
+- Python AI service reads each vendor's live catalog for isolated RAG retrieval
 - Demo accounts seeded (see credentials below)
 
 **Demo credentials:**

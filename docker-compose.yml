@@ -1,6 +1,29 @@
 version: "3.8"
 
 services:
+  ai:
+    build:
+      context: .
+      dockerfile: analytics_api/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.example
+    environment:
+      DB_PATH: /app/server/db/shopsense.db
+    volumes:
+      - ./server/db:/app/server/db
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -9,6 +32,11 @@ services:
       - "4000:4000"
     env_file:
       - .env.example
+    environment:
+      AI_SERVICE_URL: http://ai:8000
     volumes:
       - ./server/db:/app/server/db
+    depends_on:
+      ai:
+        condition: service_healthy
     restart: unless-stopped

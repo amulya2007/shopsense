@@ -3,6 +3,35 @@ const router = express.Router();
 const ragService = require("../services/ragService");
 const { requireAuth } = require("../middleware/auth");
 
+async function forwardToPythonAi(req, res, route, body) {
+  const baseUrl = (process.env.AI_SERVICE_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  try {
+    const response = await fetch(`${baseUrl}${route}`, {
+      method: req.method,
+      headers: {
+        Authorization: req.headers.authorization,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(20000),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      const message = result.detail || result.error || "The Python AI service could not process the request.";
+      return res.status(response.status).json({ error: message });
+    }
+    return res.json(result);
+  } catch (error) {
+    console.error("Python AI service request failed:", error);
+    const isTimeout = error.name === "TimeoutError" || error.name === "AbortError";
+    return res.status(isTimeout ? 504 : 503).json({
+      error: isTimeout
+        ? "The Python AI service timed out. Please try again."
+        : "The Python AI service is unavailable. Start the FastAPI service and try again.",
+    });
+  }
+}
+
 /**
  * POST /api/ai/generate-description
  * Generate a professional product description from name + category.
@@ -103,7 +132,7 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
       });
     }
 
-    // Accept optional conversation history for follow-up context
+    // Accept optional conversation history for follow-up context.
     const history = Array.isArray(conversationHistory) ? conversationHistory.slice(-4) : [];
 
     // Never trust a browser-supplied vendor ID for vendor accounts. The vendor
@@ -121,30 +150,11 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
       }
     }
 
-    const result = await ragService.answerShoppingQuestion(question, history, vendorId);
-
-    // ONLY show live catalog products (products that exist in vendor's actual catalog)
-    // Dataset products are NOT shown as they can't be viewed/purchased
-    const liveProducts = result.products.filter(
-      p => p.origin === "live_catalog" && p.vendorId === vendorId
-    );
-    const liveProductIds = new Set(liveProducts.map((product) => String(product.id)));
-    const answer = liveProducts.length === 0 &&
-      ragService.getVendorProductCount(vendorId) === 0
-      ? "This vendor account has no products in its catalog yet. Add products to this catalog, then ask me to search them."
-      : result.answer;
-    
-    res.json({
-      answer,
-      products: liveProducts.slice(0, 6), // Show only catalog products
-      sources: result.sources.filter((source) => liveProductIds.has(String(source.productId)))
+    return forwardToPythonAi(req, res, "/ai/shopping-assistant", {
+      question: question.trim(),
+      conversationHistory: history,
+      vendorId,
     });
-  } catch (error) {
-    console.error("AI Shopping Assistant error:", error);
-    res.status(500).json({
-      error: error.message || "Failed to process shopping assistant request."
-    });
-  }
 });
 
 /**
@@ -152,23 +162,7 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
  * Authenticated vendor-scoped vector index status
  */
 router.get("/status", requireAuth(["vendor", "admin"]), (req, res) => {
-  const vendorId = req.user.role === "vendor" ? Number(req.user.id) : null;
-  const count = vendorId === null
-    ? ragService.getVectorStoreCount()
-    : ragService.getVectorStoreCount(vendorId);
-  const llmProvider = ragService.getLlmProvider();
-  const hasLlmKey = Boolean(llmProvider);
-  const provider = llmProvider
-    ? `${llmProvider} + Grounded Catalog RAG`
-    : "Grounded Catalog RAG (Local)";
-
-  res.json({
-    status:               "online",
-    vectorStoreReady:     count > 0,
-    indexedProducts:      count,
-    llmProviderConfigured: hasLlmKey,
-    provider
-  });
+  return forwardToPythonAi(req, res, "/ai/status");
 });
 
 /**
@@ -177,21 +171,7 @@ router.get("/status", requireAuth(["vendor", "admin"]), (req, res) => {
  * Restricted to administrators because this refreshes all vendor indexes.
  */
 router.post("/refresh-index", requireAuth(["admin"]), (req, res) => {
-  try {
-    console.log("🔄 Manually refreshing RAG vector store...");
-    const count = ragService.buildAllVectorStores();
-    console.log(`✅ Vendor-scoped vector stores refreshed: ${count} products indexed`);
-    res.json({
-      success:        true,
-      message:        `Vendor-scoped vector indexes successfully refreshed with ${count} products.`,
-      indexedProducts: count
-    });
-  } catch (error) {
-    console.error("❌ RAG refresh error:", error);
-    res.status(500).json({
-      error: "Failed to refresh vector index: " + error.message
-    });
-  }
+  return forwardToPythonAi(req, res, "/ai/refresh-index", {});
 });
 
 // Simple public mock chat endpoint

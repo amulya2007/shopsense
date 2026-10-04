@@ -18,8 +18,9 @@ import os
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -30,12 +31,14 @@ from pydantic import BaseModel, Field
 # Configuration
 # ---------------------------------------------------------------------------
 
+_THIS_DIR = Path(__file__).parent
+load_dotenv(_THIS_DIR.parent / "server" / ".env")
+
 # Matches the Express middleware/auth.js default secret
 JWT_SECRET: str = os.getenv("JWT_SECRET", "shopsense-dev-secret")
 JWT_ALGORITHM: str = "HS256"
 
 # Shared SQLite database written by the Express server
-_THIS_DIR = Path(__file__).parent
 DB_PATH: Path = Path(
     os.getenv("DB_PATH", str(_THIS_DIR / ".." / "server" / "db" / "shopsense.db"))
 ).resolve()
@@ -126,6 +129,23 @@ class TopProductsResponse(BaseModel):
     products: list
     recommendationRule: str = "Products ranked by historical units sold, then by revenue."
 
+
+class ConversationProduct(BaseModel):
+    id: str | int | None = None
+    name: str = ""
+    category: str = ""
+
+
+class ConversationTurn(BaseModel):
+    role: Literal["assistant"]
+    products: list[ConversationProduct] = Field(default_factory=list, max_length=20)
+
+
+class ShoppingAssistantRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    conversationHistory: list[ConversationTurn] = Field(default_factory=list, max_length=4)
+    vendorId: int | None = Field(default=None, gt=0)
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -139,7 +159,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ShopSense Analytics API",
+    title="ShopSense Python AI & Analytics API",
     description=(
         "FastAPI analytics service for ShopSense. "
         "Use the JWT token from POST /api/auth/login (Express) as a Bearer token here."
@@ -167,7 +187,109 @@ app.add_middleware(
 
 @app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "ok", "service": "ShopSense Analytics API", "version": "1.0.0"}
+    return {"status": "ok", "service": "ShopSense Python AI & Analytics API", "version": "1.0.0"}
+
+
+# ---------------------------------------------------------------------------
+# Python-native, vendor-scoped retrieval-augmented generation
+# ---------------------------------------------------------------------------
+
+try:
+    from . import ai_rag
+except ImportError:
+    import ai_rag
+
+
+def _assistant_vendor_id(user: TokenPayload, requested_vendor_id: int | None) -> int:
+    if user.role == "vendor":
+        return user.id
+    if requested_vendor_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="vendorId is required when an administrator uses the shopping assistant.",
+        )
+    return requested_vendor_id
+
+
+@app.post("/ai/shopping-assistant", tags=["Python AI"], summary="Ask the vendor catalog assistant")
+async def shopping_assistant(
+    request: ShoppingAssistantRequest,
+    user: CurrentUser,
+    db: DBConn,
+) -> dict[str, Any]:
+    vendor_id = _assistant_vendor_id(user, request.vendorId)
+    vendor_exists = db.execute("SELECT 1 FROM vendors WHERE id = ?", (vendor_id,)).fetchone()
+    if not vendor_exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor account was not found.")
+
+    history = [
+        {
+            "role": turn.role,
+            "products": [product.model_dump() for product in turn.products],
+        }
+        for turn in request.conversationHistory[-4:]
+    ]
+    question = request.question.strip()
+    results = ai_rag.retrieve_products(db, question, vendor_id, history)
+    answer, _provider = await ai_rag.generate_answer(question, results)
+
+    if not results["products"] and results["totalMatched"] == 0:
+        catalog_count = db.execute(
+            "SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?",
+            (vendor_id,),
+        ).fetchone()["count"]
+        if catalog_count == 0:
+            answer = "This vendor account has no products in its catalog yet. Add products to this catalog, then ask me to search them."
+
+    sources = [
+        {
+            "productId": product["id"],
+            "productName": product["name"],
+            "category": product["category"],
+            "price": product["price"],
+            "stock": product["stock"],
+            "vendor": product["vendor"],
+            "unitsSold": product["unitsSold"],
+        }
+        for product in results["products"]
+    ]
+    return {"answer": answer, "products": results["products"][:6], "sources": sources}
+
+
+@app.get("/ai/status", tags=["Python AI"], summary="Get the vendor-scoped Python RAG status")
+def ai_status(
+    user: CurrentUser,
+    db: DBConn,
+    vendor_id: int | None = Query(default=None, alias="vendorId", gt=0),
+) -> dict[str, Any]:
+    scoped_vendor_id = user.id if user.role == "vendor" else vendor_id
+    if scoped_vendor_id is None:
+        indexed_products = db.execute("SELECT COUNT(*) AS count FROM products").fetchone()["count"]
+    else:
+        indexed_products = db.execute(
+            "SELECT COUNT(*) AS count FROM products WHERE vendor_id = ?",
+            (scoped_vendor_id,),
+        ).fetchone()["count"]
+    provider, _api_key = ai_rag._configured_provider()
+    return {
+        "status": "online",
+        "vectorStoreReady": indexed_products > 0,
+        "indexedProducts": indexed_products,
+        "llmProviderConfigured": provider is not None,
+        "provider": f"{provider} + Python RAG" if provider else "Python Grounded Catalog RAG (Local)",
+    }
+
+
+@app.post("/ai/refresh-index", tags=["Python AI"], summary="Refresh the live vendor catalog index")
+def refresh_ai_index(user: CurrentUser, db: DBConn) -> dict[str, Any]:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden for this role.")
+    count = db.execute("SELECT COUNT(*) AS count FROM products").fetchone()["count"]
+    return {
+        "success": True,
+        "message": f"Python RAG reads all {count} live catalog products directly from SQLite.",
+        "indexedProducts": count,
+    }
 
 
 # ---------------------------------------------------------------------------
