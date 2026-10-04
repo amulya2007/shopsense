@@ -93,7 +93,21 @@ Starts the API on `http://localhost:4000`. On first run, SQLite initialises auto
 | Admin | admin@demo.com | admin123 |
 | Vendor | vendor@demo.com | vendor123 |
 
-### 2. Frontend
+### 2. Python AI & Analytics Service
+
+The assistant's retrieval and response generation run in Python. Start this service alongside Express:
+
+```powershell
+cd analytics_api
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+It reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. The Node API proxies the existing `/api/ai/*` endpoints to Python. Docker Compose starts both services together.
+
+### 3. Frontend
 
 ```bash
 cd client
@@ -103,9 +117,9 @@ npm run dev
 
 Starts the app on `http://localhost:5173`. API calls to `/api/*` are proxied to the backend automatically via Vite config.
 
-### 3. AI Provider (Optional)
+### 4. AI Provider (Optional)
 
-Set one of these environment variables in `server/.env` to enable LLM-generated answer synthesis over retrieved catalog products. The same optional settings are included in the root `.env.example` for Docker Compose. Retrieval, stock/price filters, product cards, and source data remain grounded in the authenticated vendor's live catalog. Without a provider key (or if a provider is unavailable), the assistant uses its local grounded response generator.
+Set one of these environment variables in `server/.env` to enable LLM-generated answer synthesis over retrieved catalog products. Python loads the same `server/.env` for local use; Docker Compose reads the root `.env.example`. Retrieval, stock/price filters, product cards, and source data remain grounded in the authenticated vendor's live catalog. Without a provider key (or if a provider is unavailable), the Python service uses its local grounded response generator.
 
 ```env
 # Google Gemini (recommended)
@@ -130,7 +144,8 @@ JWT_SECRET=your_production_secret_here
 | `JWT_SECRET` | Recommended | JWT signing secret (defaults to dev value) |
 | `PORT` | Optional | Backend port (defaults to 4000) |
 | `CLIENT_ORIGIN` | Optional | Additional CORS origin for production deploys |
-| `DB_PATH` | Optional | Path to SQLite DB (used by FastAPI microservice) |
+| `DB_PATH` | Optional | SQLite path used by the Python AI & analytics service |
+| `AI_SERVICE_URL` | Optional | Python service URL (defaults to `http://127.0.0.1:8000`) |
 
 ---
 
