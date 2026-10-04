@@ -6,6 +6,7 @@
   "scripts": {
     "start": "python scripts/start_api.py",
     "dev": "python scripts/start_api.py --reload",
+    "local": "node scripts/start-local.js",
     "test": "python scripts/run_tests.py"
   }
 }
