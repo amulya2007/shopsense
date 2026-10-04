@@ -33,14 +33,7 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
       safeHints
     );
 
-    // Report which provider was actually used
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
-    const openAiKey = process.env.OPENAI_API_KEY;
-    const hasGemini = Boolean(geminiKey && geminiKey !== "your_key_here");
-    const hasOpenAI = Boolean(openAiKey && openAiKey !== "your_key_here");
-    const provider  = hasGemini ? "ShopSense AI" : hasOpenAI ? "OpenAI" : "Local";
-
-    res.json({ description, provider });
+    res.json({ description, provider: "Local (grounded)" });
   } catch (error) {
     console.error("Description generation error:", error);
     res.status(500).json({
@@ -163,12 +156,11 @@ router.get("/status", requireAuth(["vendor", "admin"]), (req, res) => {
   const count = vendorId === null
     ? ragService.getVectorStoreCount()
     : ragService.getVectorStoreCount(vendorId);
-  const hasGemini  = Boolean(process.env.GEMINI_API_KEY  && process.env.GEMINI_API_KEY  !== "your_key_here");
-  const hasOpenAI  = Boolean(process.env.OPENAI_API_KEY  && process.env.OPENAI_API_KEY  !== "your_key_here");
-  const hasLlmKey  = hasGemini || hasOpenAI ||
-                     Boolean(process.env.LLM_API_KEY && process.env.LLM_API_KEY !== "your_key_here");
-
-  const provider = hasGemini ? "ShopSense AI" : hasOpenAI ? "OpenAI" : "Grounded Catalog RAG (Local)";
+  const llmProvider = ragService.getLlmProvider();
+  const hasLlmKey = Boolean(llmProvider);
+  const provider = llmProvider
+    ? `${llmProvider} + Grounded Catalog RAG`
+    : "Grounded Catalog RAG (Local)";
 
   res.json({
     status:               "online",
