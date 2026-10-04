@@ -6,6 +6,6 @@
   "scripts": {
     "start": "python scripts/start_api.py",
     "dev": "python scripts/start_api.py --reload",
-    "test": "python -m unittest discover -s analytics_api -p \"test_*.py\" -v"
+    "test": "python scripts/run_tests.py"
   }
 }
