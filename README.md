@@ -107,7 +107,16 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-It reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. The Node API proxies the existing `/api/ai/*` endpoints to Python. Docker Compose starts both services together.
+It reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. The Node API proxies the existing `/api/ai/*` endpoints to Python.
+
+To start both backend services with Docker Compose, copy the root environment template to the ignored `.env`, add any provider keys, then run Compose:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+Docker Compose starts the Python AI service before Express and connects both to the shared SQLite database.
 
 ### 3. Frontend
 
