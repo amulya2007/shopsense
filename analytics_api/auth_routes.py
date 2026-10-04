@@ -387,7 +387,7 @@ def login(request: LoginRequest, db: DBConn) -> dict:
     if not account["email_verified"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Verify your email address before signing in. Use the resend verification option if needed.",
+            detail="Please verify your email before logging in. Use the resend verification option if needed.",
             headers={"X-Email-Verification-Required": "true"},
         )
 

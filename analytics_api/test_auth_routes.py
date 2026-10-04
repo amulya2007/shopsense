@@ -258,6 +258,9 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             ("Admin Person", "admin@example.com", "unused"),
         )
         first = await self.client.post("/api/auth/resend-verification", json={"email": "admin@example.com", "role": "admin"})
+        cooldown = await self.client.post("/api/auth/resend-verification", json={"email": "admin@example.com", "role": "admin"})
+        self.assertEqual(cooldown.json(), first.json())
+        self.assertEqual(len(self.sent_tokens), 1)
         self.db.execute("UPDATE email_verifications SET sent_at = '2000-01-01T00:00:00+00:00'")
         second = await self.client.post("/api/auth/resend-verification", json={"email": "admin@example.com", "role": "admin"})
         self.assertEqual((first.status_code, second.status_code), (200, 200))

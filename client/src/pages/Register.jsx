@@ -3,6 +3,20 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Eye, EyeOff, PackageSearch, ShieldCheck } from "lucide-react";
 import api from "../lib/api";
 
+const verificationRequests = new Map();
+
+function verifyEmailOnce(token) {
+  if (!verificationRequests.has(token)) {
+    const request = api.post("/auth/verify-email", { token });
+    verificationRequests.set(token, request);
+    request.then(
+      () => verificationRequests.delete(token),
+      () => verificationRequests.delete(token),
+    );
+  }
+  return verificationRequests.get(token);
+}
+
 export default function Register() {
   const [form, setForm] = useState({ fullName: "", businessName: "", email: "", password: "", phone: "", businessAddress: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +35,7 @@ export default function Register() {
 
     let active = true;
     setVerificationStatus("checking");
-    api.post("/auth/verify-email", { token: verificationToken })
+    verifyEmailOnce(verificationToken)
       .then(({ data }) => {
         if (!active) return;
         navigate("/login?verified=1", { replace: true, state: { message: data.message } });
@@ -29,10 +43,8 @@ export default function Register() {
       .catch((err) => {
         if (!active) return;
         setVerificationStatus("error");
-        setVerificationMessage(err.response?.data?.error || "This verification link is invalid or has expired.");
-      })
-      .finally(() => {
-        if (active) setSearchParams({}, { replace: true });
+        setVerificationMessage(err.response?.data?.error || "This verification link is invalid, expired, or already used.");
+        setSearchParams({}, { replace: true });
       });
 
     return () => { active = false; };
