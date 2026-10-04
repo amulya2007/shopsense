@@ -79,6 +79,11 @@ class RetrievalTests(unittest.TestCase):
 
         self.assertEqual(result["products"], [])
 
+    def test_computer_category_does_not_include_a_laptop_backpack(self):
+        result = ai_rag.retrieve_products(self.db, "Show computer products", 1)
+
+        self.assertNotIn("Everyday Laptop Backpack", [product["name"] for product in result["products"]])
+
     def test_ranking_uses_catalog_values(self):
         result = ai_rag.retrieve_products(self.db, "Which is the most expensive product?", 1)
 
@@ -130,6 +135,30 @@ class PythonGenerationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Flex Yoga Mat", prompt)
         finally:
             db.close()
+
+    async def test_grounded_description_and_seo_fields_work_without_a_provider(self):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""}):
+            description = await ai_rag.generate_product_description(
+                "Flex Yoga Mat", "Sports", "Comfortable surface for yoga."
+            )
+            seo = await ai_rag.generate_seo_content(
+                "Flex Yoga Mat", "Sports", "Comfortable surface for yoga."
+            )
+
+        self.assertEqual(description["provider"], "Local (grounded)")
+        self.assertIn("Flex Yoga Mat", description["description"])
+        self.assertEqual(seo["provider"], "Local")
+        self.assertEqual(
+            set(seo) - {"provider"},
+            {
+                "seoTitle", "description", "shortDescription", "metaTitle",
+                "metaDescription", "seoKeywords", "productTags", "keyFeatures",
+            },
+        )
+        self.assertTrue(all(seo[key] for key in (
+            "seoTitle", "description", "shortDescription", "metaTitle",
+            "metaDescription", "seoKeywords", "productTags", "keyFeatures",
+        )))
 
 
 class PythonAiEndpointTests(unittest.IsolatedAsyncioTestCase):
@@ -192,6 +221,23 @@ class PythonAiEndpointTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual(response.status_code, 400)
+
+    async def test_python_seo_endpoint_validates_auth_and_returns_expected_fields(self):
+        headers = {"Authorization": f"Bearer {self._token(1, 'vendor')}"}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""}):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=main.app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/ai/generate-seo-content",
+                    headers=headers,
+                    json={"name": "Flex Yoga Mat", "category": "Sports"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider"], "Local")
+        self.assertIn("seoKeywords", response.json())
 
 
 if __name__ == "__main__":

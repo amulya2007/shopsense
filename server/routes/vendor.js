@@ -5,7 +5,6 @@ const fs = require("fs");
 const path = require("path");
 const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
-const ragService = require("../services/ragService");
 const { generateLocalDescription } = require("../services/productIdentity");
 
 const router = express.Router();
@@ -357,7 +356,6 @@ router.post("/products", (req, res) => {
         seo.vendor_hints
       );
     const product = db.prepare("SELECT * FROM products WHERE id = ?").get(info.lastInsertRowid);
-    try { ragService.buildVectorStore(req.user.id); } catch (e) { console.error("RAG rebuild error:", e); }
     return res.status(201).json(product);
   } catch (error) {
     console.error("Unable to add product:", error);
@@ -418,7 +416,6 @@ router.put("/products/:id", (req, res) => {
     product.id
   );
   const updated = db.prepare("SELECT * FROM products WHERE id = ?").get(product.id);
-  try { ragService.buildVectorStore(req.user.id); } catch (e) { console.error("RAG rebuild error:", e); }
   res.json(updated);
 });
 
@@ -430,7 +427,6 @@ router.patch("/products/:id/stock", (req, res) => {
 
   db.prepare("UPDATE products SET stock = ? WHERE id = ?").run(Number(req.body.stock), product.id);
   const updated = db.prepare("SELECT id AS productId, name AS productName, stock FROM products WHERE id = ?").get(product.id);
-  try { ragService.buildVectorStore(req.user.id); } catch (e) { console.error("RAG rebuild error:", e); }
   res.json({ message: "Stock updated successfully", ...updated });
 });
 
@@ -445,7 +441,6 @@ router.post("/products/:id/stock-adjustments", (req, res) => {
   if (updatedStock < 0) return res.status(400).json({ error: "Stock adjustment cannot reduce stock below zero" });
 
   db.prepare("UPDATE products SET stock = ? WHERE id = ?").run(updatedStock, product.id);
-  try { ragService.buildVectorStore(req.user.id); } catch (e) { console.error("RAG rebuild error:", e); }
   res.json({ message: "Stock adjusted successfully", productId: product.id, productName: product.name, previousStock: product.stock, change, currentStock: updatedStock });
 });
 
@@ -456,7 +451,6 @@ router.delete("/products/:id", (req, res) => {
     .get(req.params.id, req.user.id);
   if (!product) return res.status(404).json({ error: "Product not found" });
   db.prepare("DELETE FROM products WHERE id = ?").run(product.id);
-  try { ragService.buildVectorStore(req.user.id); } catch (e) { console.error("RAG rebuild error:", e); }
   res.json({ message: "Product deleted" });
 });
 

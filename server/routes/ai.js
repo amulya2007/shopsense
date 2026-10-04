@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const ragService = require("../services/ragService");
 const { requireAuth } = require("../middleware/auth");
 
 async function forwardToPythonAi(req, res, route, body) {
@@ -55,14 +54,11 @@ router.post("/generate-description", requireAuth(["vendor", "admin"]), async (re
     }
 
     const safeHints = hints && typeof hints === "string" ? hints.trim().slice(0, 300) : "";
-
-    const description = await ragService.generateProductDescription(
-      name.trim(),
-      category.trim(),
-      safeHints
-    );
-
-    res.json({ description, provider: "Local (grounded)" });
+    return forwardToPythonAi(req, res, "/ai/generate-description", {
+      name: name.trim(),
+      category: category.trim(),
+      hints: safeHints,
+    });
   } catch (error) {
     console.error("Description generation error:", error);
     res.status(500).json({
@@ -87,12 +83,11 @@ router.post("/generate-seo-content", requireAuth(["vendor", "admin"]), async (re
       return res.status(400).json({ error: "Product hints must be text." });
     }
 
-    const result = await ragService.generateSeoContent(
-      name.trim(),
-      category.trim(),
-      typeof hints === "string" ? hints.trim().slice(0, 1000) : ""
-    );
-    return res.json(result);
+    return forwardToPythonAi(req, res, "/ai/generate-seo-content", {
+      name: name.trim(),
+      category: category.trim(),
+      hints: typeof hints === "string" ? hints.trim().slice(0, 1000) : "",
+    });
   } catch (error) {
     console.error("SEO content generation error:", error);
     return res.status(500).json({
@@ -103,7 +98,7 @@ router.post("/generate-seo-content", requireAuth(["vendor", "admin"]), async (re
 
 /**
  * POST /api/ai/shopping-assistant
- * RAG-powered shopping assistant endpoint.
+ * Python RAG-powered shopping assistant endpoint.
  *
  * Body:
  *   { "question": string, "conversationHistory": optional array }
@@ -171,13 +166,6 @@ router.get("/status", requireAuth(["vendor", "admin"]), (req, res) => {
  */
 router.post("/refresh-index", requireAuth(["admin"]), (req, res) => {
   return forwardToPythonAi(req, res, "/ai/refresh-index", {});
-});
-
-// Simple public mock chat endpoint
-router.get('/chat', (req, res) => {
-  const query = String(req.query.q || '').trim();
-  if (!query) return res.status(400).json({ error: 'Missing q query param' });
-  res.json({ answer: `Mock response for "${query}"` });
 });
 
 module.exports = router;

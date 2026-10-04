@@ -48,6 +48,9 @@ CATEGORY_TERMS = {
 PRODUCT_KINDS = (
     ("backpack", re.compile(r"\bbackpacks?\b", re.I)),
     ("laptop", re.compile(r"\b(?:laptops?|notebooks?)\b", re.I)),
+    ("desktop", re.compile(r"\b(?:desktops?|pcs?|computers?)\b", re.I)),
+    ("keyboard", re.compile(r"\bkeyboards?\b", re.I)),
+    ("mouse", re.compile(r"\b(?:mice|mouse)\b", re.I)),
     ("headphones", re.compile(r"\b(?:headphones?|headsets?|earbuds?|earphones?)\b", re.I)),
     ("speaker", re.compile(r"\b(?:speakers?|soundbars?)\b", re.I)),
     ("yoga mat", re.compile(r"\byoga\s+mats?\b", re.I)),
@@ -160,7 +163,7 @@ def _query_constraints(query: str) -> dict[str, Any]:
 
 def _matches_category(product: dict[str, Any], category: str) -> bool:
     product_category = product["category"].lower()
-    text = f'{product["name"]} {product["description"]}'.lower()
+    text = product["name"].lower()
     terms = CATEGORY_TERMS[category]
     if category == "fitness":
         return product_category in {"sports", "sports & fitness", "fitness"} or bool(
@@ -170,6 +173,10 @@ def _matches_category(product: dict[str, Any], category: str) -> bool:
         return product_category in {"home & kitchen", "home and kitchen"} or bool(
             re.search(r"\b(?:kitchen|household|cookware|cooking)\b", text)
         )
+    if category == "computers":
+        return product_category == "computers" or _product_kind(product["name"]) in {
+            "laptop", "desktop", "keyboard", "mouse"
+        }
     return product_category == category or bool(set(_tokens(text)) & terms)
 
 
@@ -382,7 +389,7 @@ async def generate_answer(question: str, results: dict[str, Any]) -> tuple[str, 
         "Do not invent product names, prices, specifications, reviews, or facts. State when "
         "the catalog lacks information needed for a recommendation. Be concise."
     )
-    user_prompt = f"Retrieved vendor catalog (JSON): {context!r}\nQuestion: {question!r}"
+    user_prompt = f"Retrieved vendor catalog (JSON): {json.dumps(context, ensure_ascii=False)}\nQuestion: {json.dumps(question, ensure_ascii=False)}"
 
     generated = await _generate_text(system_prompt, user_prompt)
     if generated and generated[0]:
@@ -439,8 +446,18 @@ async def _generate_text(
         if isinstance(generated, str) and generated.strip():
             return generated.strip(), provider
         logger.warning("%s returned an empty response; using the grounded local result.", provider)
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as error:
-        logger.warning("%s request failed; using the grounded local result: %s", provider, error)
+    except httpx.HTTPStatusError as error:
+        logger.warning(
+            "%s returned HTTP %s; using the grounded local result.",
+            provider,
+            error.response.status_code,
+        )
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+        logger.warning(
+            "%s request failed (%s); using the grounded local result.",
+            provider,
+            type(error).__name__,
+        )
     return None, provider
 
 
