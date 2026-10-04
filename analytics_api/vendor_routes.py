@@ -436,7 +436,7 @@ async def create_product(request: Request, db: sqlite3.Connection = Depends(_db)
     category = str(body.get("category") or "").strip()
     price = _number(body.get("price"))
     stock = body.get("stock")
-    if not name or not description or not category or body.get("price") is None or body.get("price") == "":
+    if not name or not description or not category or "price" not in body or body.get("price") == "":
         return _error(400, "Missing required fields")
     if not (price >= 0 and price != float("inf")):
         return _error(400, "Price must be a non-negative number")
@@ -488,14 +488,15 @@ async def update_product(product_id: str, request: Request, db: sqlite3.Connecti
     stock = body.get("stock")
     if stock is not None and not _whole_nonnegative(stock):
         return _error(400, "Stock must be a non-negative whole number")
-    price = _number(body["price"]) if body.get("price") is not None else product["price"]
+    price = _number(body["price"]) if "price" in body else product["price"]
     columns = [
         "name", "description", "category", "price", "stock", "image_url", *SEO_FIELDS.keys(),
     ]
     values = [
-        body.get("name", product["name"]), body.get("description", product["description"]),
-        body.get("category", product["category"]), price,
-        int(_number(stock)) if stock is not None else product["stock"], image_url,
+        body.get("name") if body.get("name") is not None else product["name"],
+        body.get("description") if body.get("description") is not None else product["description"],
+        body.get("category") if body.get("category") is not None else product["category"], price,
+        int(_number(stock)) if "stock" in body else product["stock"], image_url,
         *(seo[column] for column in SEO_FIELDS), product["id"],
     ]
     db.execute(
@@ -692,10 +693,10 @@ async def update_profile(request: Request, db: sqlite3.Connection = Depends(_db)
         """UPDATE vendors SET full_name=?, business_name=?, phone=?, business_address=?, password=?
            WHERE id=?""",
         (
-            body.get("fullName", vendor["full_name"]),
-            body.get("businessName", vendor["business_name"]),
-            body.get("phone", vendor["phone"]),
-            body.get("businessAddress", vendor["business_address"]),
+            body.get("fullName") if body.get("fullName") is not None else vendor["full_name"],
+            body.get("businessName") if body.get("businessName") is not None else vendor["business_name"],
+            body.get("phone") if body.get("phone") is not None else vendor["phone"],
+            body.get("businessAddress") if body.get("businessAddress") is not None else vendor["business_address"],
             password_hash, vendor["id"],
         ),
     )

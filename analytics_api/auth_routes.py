@@ -164,7 +164,8 @@ def _issue_verification(
         ON CONFLICT(account_type, account_id) DO UPDATE SET
             token_hash = excluded.token_hash,
             expires_at = excluded.expires_at,
-            sent_at = excluded.sent_at
+            sent_at = excluded.sent_at,
+            verified_at = NULL
         """,
         (
             account_type,
@@ -239,19 +240,25 @@ def register(request: RegistrationRequest, db: DBConn) -> dict[str, str]:
 def verify_email(request: VerifyEmailRequest, db: DBConn) -> dict[str, str]:
     token_hash = hashlib.sha256(request.token.encode("utf-8")).hexdigest()
     verification = db.execute(
-        "SELECT account_type, account_id, expires_at FROM email_verifications WHERE token_hash = ?",
+        "SELECT account_type, account_id, expires_at, verified_at FROM email_verifications WHERE token_hash = ?",
         (token_hash,),
     ).fetchone()
     if not verification:
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+    if verification["verified_at"]:
+        return {"message": "Email address verified. You can now sign in."}
     try:
         expires_at = datetime.fromisoformat(verification["expires_at"])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.") from exc
     if expires_at <= _now():
         db.execute(
-            "DELETE FROM email_verifications WHERE account_type = ? AND account_id = ?",
-            (verification["account_type"], verification["account_id"]),
+            """
+            UPDATE email_verifications
+            SET verified_at = ?
+            WHERE account_type = ? AND account_id = ?
+            """,
+            (_now().isoformat(), verification["account_type"], verification["account_id"]),
         )
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
 

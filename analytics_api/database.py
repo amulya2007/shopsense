@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS email_verifications (
   token_hash TEXT NOT NULL UNIQUE,
   expires_at TEXT NOT NULL,
   sent_at TEXT NOT NULL,
+  verified_at TEXT,
   PRIMARY KEY (account_type, account_id)
 );
 
