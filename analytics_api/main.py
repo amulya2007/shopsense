@@ -546,10 +546,13 @@ def get_top_products(
 
 if __package__:
     from .auth_routes import router as auth_router
+    from .vendor_routes import router as vendor_router
 else:
     from auth_routes import router as auth_router
+    from vendor_routes import router as vendor_router
 
 app.include_router(auth_router)
+app.include_router(vendor_router)
 
 from fastapi.staticfiles import StaticFiles
 
