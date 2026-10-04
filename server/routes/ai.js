@@ -161,8 +161,8 @@ router.get("/status", requireAuth(["vendor", "admin"]), (req, res) => {
 
 /**
  * POST /api/ai/refresh-index
- * Rebuild each vendor's isolated vector index.
- * Restricted to administrators because this refreshes all vendor indexes.
+ * Check the live catalog source used by Python RAG.
+ * Restricted to administrators.
  */
 router.post("/refresh-index", requireAuth(["admin"]), (req, res) => {
   return forwardToPythonAi(req, res, "/ai/refresh-index", {});

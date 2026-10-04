@@ -41,9 +41,9 @@ shopsense/
 │   │   ├── admin.js          Vendor approval, suspension, management
 │   │   ├── analytics.js      Full BI suite: inventory, customers, sales,
 │   │   │                     forecasting, benchmarking, CSV exports
-│   │   └── ai.js             RAG shopping assistant endpoints
+│   │   └── ai.js             Authenticated proxy to Python AI routes
 │   └── services/
-│       └── ragService.js     Product copy generation helpers
+│       └── productIdentity.js Display-safe product identity helpers
 │
 ├── client/                   React app (port 5173)
 │   └── src/

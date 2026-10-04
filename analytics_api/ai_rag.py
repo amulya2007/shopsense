@@ -361,10 +361,10 @@ def format_grounded_answer(question: str, results: dict[str, Any]) -> str:
 
 def _configured_provider() -> tuple[str | None, str | None]:
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("LLM_API_KEY")
-    if gemini_key and not gemini_key.strip().lower().startswith("your_"):
+    if gemini_key and gemini_key.strip() and not gemini_key.strip().lower().startswith("your_"):
         return "Gemini", gemini_key.strip()
     openai_key = os.getenv("OPENAI_API_KEY")
-    if openai_key and not openai_key.strip().lower().startswith("your_"):
+    if openai_key and openai_key.strip() and not openai_key.strip().lower().startswith("your_"):
         return "OpenAI", openai_key.strip()
     return None, None
 
