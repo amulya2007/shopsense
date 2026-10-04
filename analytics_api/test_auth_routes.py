@@ -231,6 +231,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM vendors").fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM email_verifications").fetchone()[0], 0)
 
+    @patch.dict(os.environ, {"SMTP_HOST": "smtp.example.test", "SMTP_USERNAME": "test@example.test", "SMTP_PASSWORD": "test-only", "EMAIL_DELIVERY_MODE": "smtp"})
     @patch("analytics_api.auth_routes._send_verification_email")
     async def test_existing_unverified_admin_can_request_verification(self, send_email):
         send_email.side_effect = self.capture_email
@@ -250,6 +251,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(verified.status_code, 200)
 
+    @patch.dict(os.environ, {"SMTP_HOST": "smtp.example.test", "SMTP_USERNAME": "test@example.test", "SMTP_PASSWORD": "test-only", "EMAIL_DELIVERY_MODE": "smtp"})
     @patch("analytics_api.auth_routes._send_verification_email")
     async def test_resend_rotates_token_and_unknown_email_gets_same_response(self, send_email):
         send_email.side_effect = self.capture_email
@@ -301,6 +303,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             _send_verification_email("person@example.test", "Test Person", "a" * 43)
 
+    @patch.dict(os.environ, {"SMTP_HOST": "smtp.example.test", "SMTP_USERNAME": "test@example.test", "SMTP_PASSWORD": "test-only", "EMAIL_DELIVERY_MODE": "smtp"})
     @patch("analytics_api.auth_routes._send_verification_email")
     async def test_unverified_admin_cannot_login_until_mailbox_is_confirmed(self, send_email):
         send_email.side_effect = self.capture_email
