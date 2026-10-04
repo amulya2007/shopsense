@@ -117,8 +117,7 @@ router.post("/generate-seo-content", requireAuth(["vendor", "admin"]), async (re
  *   ]
  */
 router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req, res) => {
-  try {
-    const { question, conversationHistory } = req.body;
+  const { question, conversationHistory } = req.body;
 
     if (!question || typeof question !== "string" || !question.trim()) {
       return res.status(400).json({
@@ -150,11 +149,11 @@ router.post("/shopping-assistant", requireAuth(["vendor", "admin"]), async (req,
       }
     }
 
-    return forwardToPythonAi(req, res, "/ai/shopping-assistant", {
-      question: question.trim(),
-      conversationHistory: history,
-      vendorId,
-    });
+  return forwardToPythonAi(req, res, "/ai/shopping-assistant", {
+    question: question.trim(),
+    conversationHistory: history,
+    vendorId,
+  });
 });
 
 /**

@@ -262,7 +262,7 @@ Both endpoints support `?scope=vendor` (live vendor sales) or `?scope=marketplac
 ---
 ## AI Shopping Assistant
 
-ShopSense includes a vendor-scoped Retrieval-Augmented Generation (RAG) assistant. It searches the authenticated vendor's live product catalog, applies hard price/category/stock filters, and can use Gemini or OpenAI to synthesize a concise answer from the retrieved records. Without an external provider, grounded local responses keep catalog search available.
+ShopSense's Retrieval-Augmented Generation (RAG) assistant runs in the Python FastAPI service. It searches the authenticated vendor's live product catalog, applies hard price/category/stock filters, and can use Gemini or OpenAI to synthesize a concise answer from the retrieved records. Without an external provider, Python generates a grounded local response.
 
 ### RAG Architecture
 
@@ -278,11 +278,10 @@ User Question
     • Follow-up context: last 2 conversation turns
       │
       ▼
-[2] Vendor-Scoped Hybrid Retrieval
-    • 128-dimensional hashed token and character n-gram vectors
-    • Category signal boosting and cosine similarity
-    • Exact token/name overlap boosts
-    • Index contains only the authenticated vendor's live products
+[2] Python Vendor-Scoped Hybrid Retrieval
+    • Stable 128-dimensional hashed token and character n-gram vectors
+    • Category-aware cosine similarity and exact token/name overlap
+    • Retrieves only the authenticated vendor's live products
       │
       ▼
 [3] Hard Constraint Filtering
@@ -301,7 +300,7 @@ User Question
       │
       ▼
 [5] Context Construction
-    • Up to 6 vendor products supplied to the response generator
+    • Up to 6 vendor products supplied to the Python answer generator
     • Context includes retrieved product fields and vendor sales history when available
     • Product cards and source citations are built separately from verified retrieved records
       │
@@ -333,23 +332,14 @@ When a query cannot be answered from available data (e.g., "best laptop for vide
 
 ### Vector Store
 
-- Local in-memory store — no external vector database required
-- 128-dimensional hashed token and character n-gram vectors per product
-- Character 3-gram subword hashing for fuzzy matching
-- Category signal boosting (2× weight)
-- Rebuilt automatically when any product is added, updated, or deleted via vendor catalog
+- Python computes stable 128-dimensional hashed token and character n-gram vectors
+- Cosine similarity is combined with lexical, product-name, and category matching
+- Retrieval reads live SQLite rows on every query, so edits and stock changes are immediately reflected
+- No external vector database or stale in-memory index is required
 
-### Index Refresh
+### Live Catalog Updates
 
-The vector index rebuilds automatically on every:
-
-- Product creation (`POST /api/vendor/products`)
-- Product update (`PUT /api/vendor/products/:id`)
-- Stock set (`PATCH /api/vendor/products/:id/stock`)
-- Stock adjustment (`POST /api/vendor/products/:id/stock-adjustments`)
-- Product deletion (`DELETE /api/vendor/products/:id`)
-
-Administrators can refresh all isolated vendor indexes with `POST /api/ai/refresh-index`.
+The Python retriever queries current SQLite rows for every assistant request, so no manual embedding-index refresh is needed after a product create, edit, stock change, or deletion. Administrators can check the current catalog count with `POST /api/ai/refresh-index`.
 
 ### Conversation Context
 
@@ -468,9 +458,9 @@ node test_m3.js     # 15 tests: Reporting APIs, benchmarking, CSV exports, auth 
 
 ---
 
-## Optional FastAPI Microservice
+## Python FastAPI AI & Analytics Service
 
-A standalone FastAPI analytics microservice is included for environments that need a Python-native REST layer. It reads the same SQLite database in read-only mode and validates the same JWT tokens.
+The Python service powers the vendor AI assistant and analytics endpoints. It reads the same SQLite database in read-only mode and validates the same JWT tokens.
 
 ```bash
 cd analytics_api
@@ -478,11 +468,13 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Endpoints: `GET /analytics/summary`, `GET /analytics/sales-over-time`, `GET /analytics/top-products`
+AI endpoints: `POST /ai/shopping-assistant`, `GET /ai/status`, `POST /ai/refresh-index`
+
+Analytics endpoints: `GET /analytics/summary`, `GET /analytics/sales-over-time`, `GET /analytics/top-products`
 
 Interactive docs at `http://localhost:8000/docs`.
 
-> The main ShopSense frontend does not depend on this microservice. It is an optional supplementary API.
+The Node API proxies authenticated `/api/ai/*` requests to Python, so both services must run during local development. Set `AI_SERVICE_URL` when they are not on the same host.
 
 ---
 
