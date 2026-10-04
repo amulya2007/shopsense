@@ -315,6 +315,16 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("SMTP_USERNAME", error.exception.detail)
         self.assertIn("SMTP_PASSWORD", error.exception.detail)
 
+    @patch.dict(os.environ, {"SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "587"}, clear=True)
+    def test_missing_email_error_only_names_values_that_are_missing(self):
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as error:
+            _smtp_settings()
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("SMTP_USERNAME, SMTP_PASSWORD", error.exception.detail)
+        self.assertNotIn("SMTP_HOST", error.exception.detail)
+
     @patch.dict(
         os.environ,
         {
