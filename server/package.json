@@ -1,9 +1,0 @@
-{
-  "name": "shopsense-python-api",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "start": "python ../scripts/start_api.py",
-    "dev": "python ../scripts/start_api.py --reload"
-  }
-}
