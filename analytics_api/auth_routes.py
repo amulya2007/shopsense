@@ -67,7 +67,10 @@ def _smtp_settings() -> tuple[str, int, str, str, str, bool]:
     if not all((host, username, password, sender)):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Email verification is not configured. Contact the administrator.",
+            detail=(
+                "Email delivery is not configured. Set SMTP_HOST, SMTP_USERNAME, and "
+                "SMTP_PASSWORD in the root .env, then restart the API."
+            ),
         )
     try:
         port = int(os.getenv("SMTP_PORT", "587"))
