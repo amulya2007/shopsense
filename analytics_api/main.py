@@ -146,6 +146,12 @@ class ShoppingAssistantRequest(BaseModel):
     conversationHistory: list[ConversationTurn] = Field(default_factory=list, max_length=4)
     vendorId: int | None = Field(default=None, gt=0)
 
+
+class ProductContentRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    category: str = Field(min_length=1, max_length=100)
+    hints: str = Field(default="", max_length=1000)
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -209,6 +215,24 @@ def _assistant_vendor_id(user: TokenPayload, requested_vendor_id: int | None) ->
             detail="vendorId is required when an administrator uses the shopping assistant.",
         )
     return requested_vendor_id
+
+
+@app.post("/ai/generate-description", tags=["Python AI"], summary="Generate a grounded product description")
+async def generate_product_description(request: ProductContentRequest, _user: CurrentUser) -> dict[str, str]:
+    return await ai_rag.generate_product_description(
+        request.name.strip(),
+        request.category.strip(),
+        request.hints.strip()[:300],
+    )
+
+
+@app.post("/ai/generate-seo-content", tags=["Python AI"], summary="Generate grounded product SEO fields")
+async def generate_seo_content(request: ProductContentRequest, _user: CurrentUser) -> dict[str, Any]:
+    return await ai_rag.generate_seo_content(
+        request.name.strip(),
+        request.category.strip(),
+        request.hints.strip(),
+    )
 
 
 @app.post("/ai/shopping-assistant", tags=["Python AI"], summary="Ask the vendor catalog assistant")
