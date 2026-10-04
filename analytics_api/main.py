@@ -39,8 +39,13 @@ JWT_SECRET: str = os.getenv("JWT_SECRET", "shopsense-dev-secret")
 JWT_ALGORITHM: str = "HS256"
 
 # Shared SQLite database written by the Express server
-DB_PATH: Path = Path(
+_configured_db_path = Path(
     os.getenv("DB_PATH", str(_THIS_DIR / ".." / "server" / "db" / "shopsense.db"))
+)
+DB_PATH: Path = (
+    _configured_db_path
+    if _configured_db_path.is_absolute()
+    else _THIS_DIR.parent / _configured_db_path
 ).resolve()
 
 # ---------------------------------------------------------------------------
@@ -255,7 +260,10 @@ async def shopping_assistant(
     ]
     question = request.question.strip()
     results = ai_rag.retrieve_products(db, question, vendor_id, history)
-    answer, _provider = await ai_rag.generate_answer(question, results)
+    if results["constraints"]["count"]:
+        answer = ai_rag.format_grounded_answer(question, results)
+    else:
+        answer, _provider = await ai_rag.generate_answer(question, results)
 
     if not results["products"] and results["totalMatched"] == 0:
         catalog_count = db.execute(

@@ -332,7 +332,7 @@ def _serialize_product(product: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _local_answer(question: str, results: dict[str, Any]) -> str:
+def format_grounded_answer(question: str, results: dict[str, Any]) -> str:
     constraints = results["constraints"]
     if re.match(r"^\s*(?:hello|hi|hey|greetings|howdy)\b", question, re.I):
         return "Hello! What products or category would you like to explore?"
@@ -372,7 +372,7 @@ def _configured_provider() -> tuple[str | None, str | None]:
 async def generate_answer(question: str, results: dict[str, Any]) -> tuple[str, str]:
     """Generate from retrieved facts using Python HTTP clients, or fall back locally."""
     provider, api_key = _configured_provider()
-    fallback = _local_answer(question, results)
+    fallback = format_grounded_answer(question, results)
     if not provider or not api_key or not results["products"]:
         return fallback, "Python Grounded Catalog RAG (Local)"
 
@@ -490,7 +490,9 @@ async def generate_product_description(name: str, category: str, hints: str = ""
         max_tokens=180,
     )
     if generated:
-        return {"description": _clean_text(generated, 1200), "provider": provider or "Local (grounded)"}
+        description = _clean_text(generated, 1200)
+        if description:
+            return {"description": description, "provider": provider or "Local (grounded)"}
     return {"description": fallback, "provider": "Local (grounded)"}
 
 
@@ -506,7 +508,11 @@ def _fallback_seo_content(name: str, category: str, hints: str) -> dict[str, Any
         for value in re.split(r"[\n;|]+", hints)
         if _clean_text(value, 120)
     ][:8] or [_clean_text(description, 120)]
-    tags = list(dict.fromkeys([category, *re.findall(r"[A-Za-z0-9]+", name)]))[:10]
+    tags = list(dict.fromkeys(
+        _clean_text(value, 40)
+        for value in [category, *re.findall(r"[A-Za-z0-9]+", name)]
+        if _clean_text(value, 40)
+    ))[:10]
     return {
         "seoTitle": _clean_text(f"{name} | {category}", 70),
         "description": description,
