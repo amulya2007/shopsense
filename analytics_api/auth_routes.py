@@ -64,7 +64,7 @@ def _normalize_email(raw_email: str) -> str:
 def _smtp_settings() -> tuple[str, int, str, str, str, bool]:
     host = os.getenv("SMTP_HOST", "").strip()
     username = os.getenv("SMTP_USERNAME", "").strip()
-    password = os.getenv("SMTP_PASSWORD", "")
+    password = os.getenv("SMTP_PASSWORD", "").strip()
     sender = (
         os.getenv("SMTP_FROM", "").strip()
         or os.getenv("SMTP_FROM_EMAIL", "").strip()

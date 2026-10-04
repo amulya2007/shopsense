@@ -1,6 +1,7 @@
 import sqlite3
 import unittest
 import os
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
 import httpx
@@ -145,6 +146,55 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             json={"token": self.sent_tokens[0][1]},
         )
         self.assertEqual(repeated_verification.status_code, 200)
+
+    @patch.dict(
+        os.environ,
+        {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "shop@example.test",
+            "SMTP_PASSWORD": "test-secret",
+            "SMTP_FROM": "shop@example.test",
+            "CLIENT_ORIGIN": "http://localhost:5173",
+        },
+    )
+    @patch("analytics_api.auth_routes.smtplib.SMTP")
+    async def test_registration_sends_link_that_verifies_account(self, smtp_class):
+        smtp = smtp_class.return_value.__enter__.return_value
+        response = await self.client.post(
+            "/api/auth/register",
+            json={
+                "fullName": "Casey Example",
+                "businessName": "Casey Goods",
+                "email": "casey@example.com",
+                "password": "correct-horse-battery",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["email"], "casey@example.com")
+        smtp.starttls.assert_called_once()
+        smtp.send_message.assert_called_once()
+        message = smtp.send_message.call_args.args[0]
+        verification_link = next(
+            line
+            for line in message.get_body(preferencelist=("plain",)).get_content().splitlines()
+            if line.startswith("http://localhost:5173/register?")
+        )
+        parsed_link = urlparse(verification_link)
+        self.assertEqual(parsed_link.path, "/register")
+        token = parse_qs(parsed_link.query)["verifyEmailToken"][0]
+
+        verification = await self.client.post("/api/auth/verify-email", json={"token": token})
+
+        self.assertEqual(verification.status_code, 200)
+        self.assertEqual(
+            self.db.execute(
+                "SELECT email_verified FROM vendors WHERE email = ?",
+                ("casey@example.com",),
+            ).fetchone()[0],
+            1,
+        )
 
     @patch("analytics_api.auth_routes._send_verification_email")
     async def test_invalid_email_is_rejected_without_creating_an_account(self, send_email):
