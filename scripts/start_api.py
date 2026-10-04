@@ -1,0 +1,26 @@
+"""Start the Python-only ShopSense API using the project virtual environment."""
+
+import os
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+VENV_PYTHON = PROJECT_ROOT / ".venv" / (
+    "Scripts/python.exe" if os.name == "nt" else "bin/python"
+)
+
+if VENV_PYTHON.is_file() and Path(sys.executable).resolve() != VENV_PYTHON.resolve():
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+os.chdir(PROJECT_ROOT)
+
+import uvicorn
+
+reload = "--reload" in sys.argv[1:]
+uvicorn.run(
+    "analytics_api.main:app",
+    host=os.getenv("HOST", "0.0.0.0"),
+    port=int(os.getenv("PORT", "8000")),
+    reload=reload,
+)
