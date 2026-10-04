@@ -253,12 +253,8 @@ def verify_email(request: VerifyEmailRequest, db: DBConn) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.") from exc
     if expires_at <= _now():
         db.execute(
-            """
-            UPDATE email_verifications
-            SET verified_at = ?
-            WHERE account_type = ? AND account_id = ?
-            """,
-            (_now().isoformat(), verification["account_type"], verification["account_id"]),
+            "DELETE FROM email_verifications WHERE account_type = ? AND account_id = ?",
+            (verification["account_type"], verification["account_id"]),
         )
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
 
@@ -271,8 +267,12 @@ def verify_email(request: VerifyEmailRequest, db: DBConn) -> dict[str, str]:
         if result.rowcount != 1:
             raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
         db.execute(
-            "DELETE FROM email_verifications WHERE account_type = ? AND account_id = ?",
-            (verification["account_type"], verification["account_id"]),
+            """
+            UPDATE email_verifications
+            SET verified_at = ?
+            WHERE account_type = ? AND account_id = ?
+            """,
+            (_now().isoformat(), verification["account_type"], verification["account_id"]),
         )
     return {"message": "Email address verified. You can now sign in."}
 

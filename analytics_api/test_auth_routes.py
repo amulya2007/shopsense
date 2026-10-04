@@ -5,7 +5,6 @@ from unittest.mock import patch
 import httpx
 
 from analytics_api import main
-from analytics_api.auth_routes import _send_verification_email
 
 
 def make_auth_database():
@@ -60,7 +59,7 @@ class EmailAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             base_url="http://test",
         )
 
-    async def tearDown(self):
+    async def asyncTearDown(self):
         await self.client.aclose()
         main.app.dependency_overrides.pop(main.get_db, None)
         self.db.close()

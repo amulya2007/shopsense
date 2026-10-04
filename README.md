@@ -14,10 +14,9 @@ ShopSense combines a live vendor catalog management system with deep analytics d
 
 | Layer | Technology |
 |---|---|
-| Marketplace API | Node.js, Express |
-| AI & analytics API | Python, FastAPI |
-| Database | Shared SQLite via `better-sqlite3` and Python's `sqlite3` |
-| Authentication | JWT (7-day), bcryptjs, RBAC |
+| Backend API | Python, FastAPI |
+| Database | SQLite via Python's `sqlite3` |
+| Authentication | Email verification, JWT (7-day), bcrypt, RBAC |
 | Frontend | React 19, Vite, React Router v6, Tailwind CSS |
 | Icons | lucide-react |
 | Analytics data | XLSX dataset import into SQLite on first run |
@@ -30,21 +29,6 @@ ShopSense combines a live vendor catalog management system with deep analytics d
 
 ```
 shopsense/
-├── server/                   Express API (port 4000)
-│   ├── db/                   SQLite database + auto-seed on startup
-│   │   └── index.js          Schema creation, dataset import, demo seed
-│   ├── middleware/
-│   │   └── auth.js           JWT verification + RBAC guard
-│   ├── routes/
-│   │   ├── auth.js           Login, register, token refresh
-│   │   ├── vendor.js         Catalog CRUD, stock management, dashboard
-│   │   ├── admin.js          Vendor approval, suspension, management
-│   │   ├── analytics.js      Full BI suite: inventory, customers, sales,
-│   │   │                     forecasting, benchmarking, CSV exports
-│   │   └── ai.js             Authenticated proxy to Python AI routes
-│   └── services/
-│       └── productIdentity.js Display-safe product identity helpers
-│
 ├── client/                   React app (port 5173)
 │   └── src/
 │       ├── pages/
@@ -54,8 +38,10 @@ shopsense/
 │       ├── context/          AuthContext (JWT session)
 │       └── lib/              Axios API client, currency formatter
 │
-├── analytics_api/            Python FastAPI AI + analytics service (port 8000)
-│   ├── main.py               JWT-protected AI and analytics endpoints
+├── analytics_api/            Python FastAPI backend (port 8000)
+│   ├── main.py               API, authentication, and analytics endpoints
+│   ├── auth_routes.py        Email verification and login
+│   ├── database.py           SQLite schema, migrations, and dataset import
 │   ├── ai_rag.py             Python retrieval, constraints, and LLM generation
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -71,46 +57,45 @@ shopsense/
 
 ## Setup
 
-### 1. Install Python AI dependencies (one time)
+### 1. Install backend dependencies (one time)
 
 From the repository root:
 
 ```powershell
-python -m venv .venv
+py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r analytics_api\requirements.txt
 ```
 
-The project startup script automatically uses this virtual environment to start FastAPI.
+On macOS/Linux, create and use `.venv` with `python3 -m venv .venv`.
 
-### 2. Start the backend
+### 2. Configure email and start the backend
 
 ```powershell
-npm install
+Copy-Item .env.example .env
+# Edit .env with real SMTP credentials and a strong JWT_SECRET.
 npm run dev
 ```
 
-This starts the Python AI service and Express API together. Express is available at `http://localhost:4000`; Python runs at `http://localhost:8000`. On first run, SQLite initializes automatically with:
+This starts the Python API at `http://localhost:8000`; no Node/Express backend is used. The API initializes SQLite on first run and imports the historical XLSX dataset.
 
-- Schema creation (vendors, products, sales, analytics tables)
-- Historical dataset import from `/dataset/*.xlsx`
-- Python AI service reads each vendor's live catalog for isolated RAG retrieval
-- Demo accounts seeded (see credentials below)
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL` in `.env`. Gmail requires an app password; do not put credentials in frontend code or commit them.
 
-**Demo credentials:**
+To create the first administrator, set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, and a unique `BOOTSTRAP_ADMIN_PASSWORD` in `.env`, then call the one-time bootstrap endpoint:
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | admin@demo.com | admin123 |
-| Vendor | vendor@demo.com | vendor123 |
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/bootstrap-admin
+```
 
-The Python service reads the same SQLite database, verifies the Express-issued JWT, and retrieves only the signed-in vendor's live products. To start both backend services with Docker Compose, copy the root environment template to the ignored `.env`, add any provider keys, then run Compose:
+The administrator must verify that mailbox before signing in. New vendor applications also require email verification before admin approval. Existing accounts are marked unverified during migration; their owners must use the sign-in page’s resend-verification flow. There are no shared demo credentials.
+
+To run the Python API in Docker:
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up --build
 ```
 
-Docker Compose starts the Python AI service before Express and connects both to the shared SQLite database.
+Docker Compose runs the single Python backend and persists its SQLite database and uploads.
 
 ### 3. Frontend
 
@@ -149,10 +134,16 @@ JWT_SECRET=your_production_secret_here
 | `OPENAI_API_KEY` | Optional | OpenAI API key (used if Gemini not configured) |
 | `LLM_API_KEY` | Optional | Legacy alias for `GEMINI_API_KEY` |
 | `JWT_SECRET` | Recommended | JWT signing secret (defaults to dev value) |
-| `PORT` | Optional | Backend port (defaults to 4000) |
+| `PORT` | Optional | Python API port (defaults to 8000) |
 | `CLIENT_ORIGIN` | Optional | Additional CORS origin for production deploys |
-| `DB_PATH` | Optional | SQLite path used by the Python AI & analytics service |
-| `AI_SERVICE_URL` | Optional | Python service URL (defaults to `http://127.0.0.1:8000`) |
+| `DB_PATH` | Optional | SQLite database path |
+| `SMTP_HOST` | Required for registration | SMTP mail server host |
+| `SMTP_PORT` | Required for registration | SMTP port (587 with STARTTLS; 465 with SSL) |
+| `SMTP_USERNAME` | Required for registration | SMTP account username |
+| `SMTP_PASSWORD` | Required for registration | SMTP account password/app password |
+| `SMTP_FROM_EMAIL` | Required for registration | Verified sender address |
+| `BOOTSTRAP_ADMIN_EMAIL` | Initial setup | Email address for the first administrator |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Initial setup | Unique 12-72 byte password for the first administrator |
 
 ---
 
@@ -425,63 +416,27 @@ PATCH /api/admin/vendors/:id/status
 
 ## Authentication & Security
 
-- Passwords hashed with bcryptjs (10 rounds)
+- Registration and login are handled by FastAPI; JavaScript is used for the React frontend only
+- Email ownership must be verified through a time-limited email link before login
+- Passwords hashed with bcrypt (12 rounds)
 - Stateless JWT authentication with 7-day validity
-- Role-based access control: `vendor` and `admin` roles enforced at middleware level
+- Role-based access control: `vendor` and `admin` roles enforced by Python dependencies
 - Strict vendor data isolation: vendors can only read and modify their own catalog and sales data
 - AI API keys stored in environment variables only — never in frontend code or committed to source control
 - Input validation on all endpoints: negative stock, malformed prices, oversized requests all rejected
+- Email verification tokens are stored as hashes, expire after 30 minutes, and are invalidated when reissued
 
 ---
 
 ## Testing
 
-Run the included test suites against the live server:
+Run the Python test suites from the repository root:
 
 ```bash
-# From server/
-node test_rag.js    # 21 tests: RAG, vector store, constraint validation, analytics
-node test_m3.js     # 15 tests: Reporting APIs, benchmarking, CSV exports, auth security
+.\.venv\Scripts\python.exe -m unittest discover -s analytics_api -p "test_*.py" -v
 ```
 
-**Last verified results:**
-
-| Suite | Tests | Result |
-|---|---|---|
-| test_rag.js | 21 | 21 passed, 0 failed |
-| test_m3.js | 15 | 15 passed, 0 failed |
-| Total | 36 | 36 passed, 0 failed |
-
-**Constraint tests verified:**
-
-| Query | Constraint | Result |
-|---|---|---|
-| "Electronics in stock" | category=Electronics, stock>0 | All results in Electronics, all in stock |
-| "Under 50,000" | price ≤ 50,000 | All results ≤ ₹9,999 (entire catalog qualifies) |
-| "Between 10,000 and 30,000" | price 10k–30k | Honest: no catalog products in that range |
-| "Out of stock" | stock = 0 | All results have stock = 0 |
-| "Cheapest Audio" | category=Audio, cheapest | All results in Audio, sorted by price ascending |
-| "Popular products" | isPopular | Sorted by real unitsSold from order history |
-
----
-
-## Python FastAPI AI & Analytics Service
-
-The Python service powers the vendor AI assistant and analytics endpoints. It reads the same SQLite database in read-only mode and validates the same JWT tokens.
-
-```bash
-cd analytics_api
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-AI endpoints: `POST /ai/shopping-assistant`, `GET /ai/status`, `POST /ai/refresh-index`
-
-Analytics endpoints: `GET /analytics/summary`, `GET /analytics/sales-over-time`, `GET /analytics/top-products`
-
-Interactive docs at `http://localhost:8000/docs`.
-
-The Node API proxies authenticated `/api/ai/*` requests to Python, so both services must run during local development. Set `AI_SERVICE_URL` when they are not on the same host.
+The suite covers authentication/email verification, Python AI/RAG behavior, and migrated API routers.
 
 ---
 
