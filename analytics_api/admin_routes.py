@@ -128,11 +128,11 @@ def update_vendor_status(
     return {"message": f"Vendor {new_status}"}
 
 
-@router.delete("/vendors/{vendor_id}")
-def delete_vendor(vendor_id: str, db: AdminDB) -> dict[str, str]:
+@router.delete("/vendors/{vendor_id}", response_model=None)
+def delete_vendor(vendor_id: str, db: AdminDB) -> dict[str, str] | JSONResponse:
     vendor = db.execute("SELECT id FROM vendors WHERE id = ?", (vendor_id,)).fetchone()
     if vendor is None:
-        raise HTTPException(status_code=404, detail={"error": "Vendor not found"})
+        return JSONResponse(status_code=404, content={"error": "Vendor not found"})
 
     with db:
         db.execute("DELETE FROM sales WHERE vendor_id = ?", (vendor["id"],))
