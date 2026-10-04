@@ -1,6 +1,7 @@
 """Run Python backend tests with the project virtual environment when present."""
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,26 +11,11 @@ VENV_PYTHON = PROJECT_ROOT / ".venv" / (
     "Scripts/python.exe" if os.name == "nt" else "bin/python"
 )
 
-if VENV_PYTHON.is_file() and Path(sys.executable).resolve() != VENV_PYTHON.resolve():
-    os.execv(
-        str(VENV_PYTHON),
-        [
-            str(VENV_PYTHON),
-            "-m",
-            "pytest",
-            "-q",
-            "analytics_api",
-        ],
-    )
-
-os.chdir(PROJECT_ROOT)
-os.execv(
-    sys.executable,
-    [
-        sys.executable,
-        "-m",
-        "pytest",
-        "-q",
-        "analytics_api",
-    ],
+python = VENV_PYTHON if VENV_PYTHON.is_file() else Path(sys.executable)
+result = subprocess.run(
+    [str(python), "-m", "pytest", "-q", "analytics_api"],
+    cwd=PROJECT_ROOT,
+    env=os.environ.copy(),
+    check=False,
 )
+raise SystemExit(result.returncode)

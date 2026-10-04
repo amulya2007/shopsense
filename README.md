@@ -44,7 +44,12 @@ shopsense/
 │   ├── database.py           SQLite schema, migrations, and dataset import
 │   ├── ai_rag.py             Python retrieval, constraints, and LLM generation
 │   ├── requirements.txt
+│   ├── requirements-dev.txt
 │   └── Dockerfile
+│
+├── server/                   Runtime SQLite database and product uploads
+│   ├── db/                   SQLite database (created on first API start)
+│   └── uploads/              Product image uploads
 │
 └── dataset/                  Source XLSX files (imported once into SQLite)
     ├── products_1.xlsx
