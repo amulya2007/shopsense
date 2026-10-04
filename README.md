@@ -103,7 +103,7 @@ Starts the app on `http://localhost:5173`. API calls to `/api/*` are proxied to 
 
 ### 3. AI Provider (Optional)
 
-Set one of these environment variables in `server/.env` to enable LLM-generated answer synthesis over retrieved catalog products. Retrieval, stock/price filters, product cards, and source data remain grounded in the authenticated vendor's live catalog. Without a provider key (or if a provider is unavailable), the assistant uses its local grounded response generator.
+Set one of these environment variables in `server/.env` to enable LLM-generated answer synthesis over retrieved catalog products. The same optional settings are included in the root `.env.example` for Docker Compose. Retrieval, stock/price filters, product cards, and source data remain grounded in the authenticated vendor's live catalog. Without a provider key (or if a provider is unavailable), the assistant uses its local grounded response generator.
 
 ```env
 # Google Gemini (recommended)
@@ -124,7 +124,7 @@ JWT_SECRET=your_production_secret_here
 |---|---|---|
 | `GEMINI_API_KEY` | Optional | Google Gemini API key for LLM generation |
 | `OPENAI_API_KEY` | Optional | OpenAI API key (used if Gemini not configured) |
-| `LLM_API_KEY` | Optional | Generic fallback LLM key alias |
+| `LLM_API_KEY` | Optional | Legacy alias for `GEMINI_API_KEY` |
 | `JWT_SECRET` | Recommended | JWT signing secret (defaults to dev value) |
 | `PORT` | Optional | Backend port (defaults to 4000) |
 | `CLIENT_ORIGIN` | Optional | Additional CORS origin for production deploys |
