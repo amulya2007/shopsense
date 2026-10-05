@@ -362,9 +362,11 @@ def resend_verification(request: ResendVerificationRequest, db: DBConn) -> dict[
                     account["display_name"],
                 )
         except HTTPException as exc:
-            if exc.status_code not in {status.HTTP_429_TOO_MANY_REQUESTS, status.HTTP_503_SERVICE_UNAVAILABLE}:
+            if exc.status_code != status.HTTP_429_TOO_MANY_REQUESTS:
                 raise
-            # Keep cooldown and delivery state indistinguishable from unknown accounts.
+            # Keep the cooldown response indistinguishable from unknown accounts.
+            # Delivery failures must reach the caller so the user is not told the
+            # verification email was requested when it could not be sent.
             logger.info("Verification resend was not completed (status=%s)", exc.status_code)
     if delivery_mode == "console":
         message = (
