@@ -75,7 +75,12 @@ export default function Login() {
       login(data.token, data.user);
       navigate(role === "admin" ? "/admin/dashboard" : "/vendor/dashboard");
     } catch (err) {
-      setError(err.response?.data?.error || "Something went wrong. Try again.");
+      setError(
+        err.response?.data?.error ||
+        (err.response
+          ? "The ShopSense API could not process this login. Check that the frontend points to the correct API URL."
+          : "Cannot reach the ShopSense API. Start the backend or check VITE_API_URL in the frontend deployment."),
+      );
       setVerificationRequired(
         err.response?.status === 403 &&
         err.response?.headers?.["x-email-verification-required"] === "true"

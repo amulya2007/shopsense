@@ -391,6 +391,13 @@ def login(request: LoginRequest, db: DBConn) -> dict:
         f"SELECT * FROM {table} WHERE lower(email) = ?",
         (email,),
     ).fetchone()
+    if request.role == "admin" and account is None:
+        configured_admin = db.execute("SELECT 1 FROM admins LIMIT 1").fetchone()
+        if configured_admin is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No administrator is set up for this app yet. The app owner must configure and bootstrap the first admin account.",
+            )
     try:
         password_valid = account is not None and bcrypt.checkpw(
             request.password.encode("utf-8"),
