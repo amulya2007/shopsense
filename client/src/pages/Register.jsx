@@ -32,23 +32,22 @@ export default function Register() {
 
   useEffect(() => {
     if (!verificationToken) return;
+    setVerificationStatus("ready");
+  }, [verificationToken]);
 
-    let active = true;
+  const handleVerifyEmail = async () => {
+    if (!verificationToken || verificationStatus === "checking") return;
     setVerificationStatus("checking");
-    verifyEmailOnce(verificationToken)
-      .then(({ data }) => {
-        if (!active) return;
-        navigate("/login?verified=1", { replace: true, state: { message: data.message } });
-      })
-      .catch((err) => {
-        if (!active) return;
-        setVerificationStatus("error");
-        setVerificationMessage(err.response?.data?.error || "This verification link is invalid, expired, or already used.");
-        setSearchParams({}, { replace: true });
-      });
-
-    return () => { active = false; };
-  }, [verificationToken, setSearchParams, navigate]);
+    setVerificationMessage("");
+    try {
+      const { data } = await verifyEmailOnce(verificationToken);
+      navigate("/login?verified=1", { replace: true, state: { message: data.message } });
+    } catch (err) {
+      setVerificationStatus("error");
+      setVerificationMessage(err.response?.data?.error || "This verification link is invalid, expired, or already used.");
+      setSearchParams({}, { replace: true });
+    }
+  };
 
   const update = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -86,10 +85,12 @@ export default function Register() {
       <div className="w-full max-w-md text-center p-8 rounded-2xl shadow-lg shadow-emerald-950/5" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
         {isSuccess && <div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-5" style={{ background: "var(--success-soft)" }}><CheckCircle2 size={28} style={{ color: "var(--success)" }} /></div>}
         <p className="text-xs font-bold uppercase tracking-[0.16em] mb-2" style={{ color: isSuccess ? "var(--success)" : "var(--ink-soft)" }}>
-          {verificationStatus === "checking" ? "Verifying email" : isSuccess ? "Email verified" : "Verification failed"}
+          {verificationStatus === "ready" ? "Confirm your email" : verificationStatus === "checking" ? "Verifying email" : isSuccess ? "Email verified" : "Verification failed"}
         </p>
-        <h2 className="font-display text-xl font-bold mb-3">{verificationStatus === "checking" ? "Please wait…" : isSuccess ? "You’re verified." : "We couldn’t verify this link."}</h2>
+        <h2 className="font-display text-xl font-bold mb-3">{verificationStatus === "ready" ? "Verify this email address?" : verificationStatus === "checking" ? "Please wait…" : isSuccess ? "You’re verified." : "We couldn’t verify this link."}</h2>
+        {verificationStatus === "ready" && <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>Press the button below to confirm your email and continue to sign in.</p>}
         {verificationMessage && <p className="text-sm leading-6 mb-6" style={{ color: "var(--ink-soft)" }}>{verificationMessage}</p>}
+        {verificationStatus === "ready" && <button onClick={handleVerifyEmail} className="w-full mb-4 py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Verify email</button>}
         {verificationStatus !== "checking" && <><Link to="/login?resend=1" className="block mb-4 text-sm font-semibold underline" style={{ color: "var(--primary)" }}>Request another verification email</Link><button onClick={() => navigate("/login")} className="w-full py-3 rounded-xl text-sm font-semibold text-white focus-ring" style={{ background: "var(--primary)" }}>Continue to sign in</button></>}
       </div>
     </div>;
