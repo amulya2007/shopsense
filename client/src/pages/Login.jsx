@@ -173,7 +173,7 @@ export default function Login() {
           </p>
 
           <p className="-mt-5 mb-5 text-xs" style={{ color: "var(--ink-soft)" }}>
-            {isAdmin ? "Use the administrator email configured for this installation. There are no shared demo admin credentials." : "Use the email address you registered with."}
+            {isAdmin ? "Admin access is provisioned privately by the app owner. There is no public admin signup or shared demo password." : "Use the email address you registered with."}
           </p>
 
           {verificationNotice && <div className="mb-4 text-sm px-4 py-3 rounded-lg" role="status" style={{ background: "var(--success-soft)", color: "var(--success)" }}>Email verified successfully. Sign in with the same email address you just verified.</div>}

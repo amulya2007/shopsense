@@ -85,7 +85,7 @@ This starts the Python API at `http://localhost:8000`; no Node/Express backend i
 
 Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in the root `.env`. Root `.env` values take precedence over legacy `server/.env` values. Gmail requires 2-Step Verification and a Google App Password; use that in `SMTP_PASSWORD`, not your regular account password. `SMTP_FROM` is optional and defaults to `SMTP_USERNAME`; `SMTP_FROM_EMAIL` remains supported as a legacy alias. Never put credentials in frontend code or commit them.
 
-To create the first administrator, set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, and a unique `BOOTSTRAP_ADMIN_PASSWORD` in `.env`, then call the one-time bootstrap endpoint:
+To create the first administrator, set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, and a unique `BOOTSTRAP_ADMIN_PASSWORD` in `.env`, then call the one-time bootstrap endpoint. These are private credentials for this installation; there are no built-in or shared admin credentials, and vendor registration cannot create an admin account. Keep the bootstrap password private and give access only to the intended administrator.
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/bootstrap-admin

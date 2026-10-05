@@ -43,8 +43,26 @@ else:
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Matches the Express middleware/auth.js default secret
-JWT_SECRET: str = os.getenv("JWT_SECRET", "shopsense-dev-secret")
+# Keep a development fallback for local setup, but never let a deployed app
+# accept it (or another short, guessable key) for signing administrator tokens.
+JWT_SECRET: str = os.getenv("JWT_SECRET", "shopsense-dev-secret").strip()
+_runtime_values = {
+    os.getenv(key, "").strip().lower()
+    for key in ("APP_ENV", "ENVIRONMENT", "NODE_ENV")
+}
+_is_deployed = any(os.getenv(key, "").strip() for key in (
+    "RENDER", "VERCEL", "DYNO", "K_SERVICE", "AWS_LAMBDA_FUNCTION_NAME",
+    "WEBSITE_INSTANCE_ID", "FUNCTIONS_WORKER_RUNTIME", "RAILWAY_ENVIRONMENT",
+))
+if "production" in _runtime_values or _is_deployed:
+    if (
+        len(JWT_SECRET.encode("utf-8")) < 32
+        or JWT_SECRET == "shopsense-dev-secret"
+        or JWT_SECRET.lower().startswith(("your_", "change-me", "changeme", "use-a-unique"))
+    ):
+        raise RuntimeError(
+            "Set JWT_SECRET to a private random value of at least 32 bytes before running in production."
+        )
 JWT_ALGORITHM: str = "HS256"
 
 # ---------------------------------------------------------------------------
