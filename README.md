@@ -438,7 +438,6 @@ POST /api/ai/refresh-index
 GET   /api/admin/vendors
 PATCH /api/admin/vendors/:id/status
 ```
-
 ---
 
 ## Authentication & Security
