@@ -8,3 +8,5 @@ describe('Health endpoint', () => {
     expect(res.body).toEqual({ status: 'ok' });
   });
 });
+
+
