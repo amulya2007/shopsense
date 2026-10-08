@@ -9,7 +9,7 @@ from analytics_api.market_analytics_routes import router
 
 
 def make_analytics_db():
-    db = sqlite3.connect(":memory:")
+    db = sqlite3.connect(":memory:", check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.executescript(
         """
